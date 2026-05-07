@@ -5,7 +5,7 @@ import * as XLSX from "xlsx";
 import { getServerAuthSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-function toRows(resource: string, records: Record<string, unknown>[]) {
+function toRows(resource: string, records: Record<string, unknown>[]): Record<string, unknown>[] {
   switch (resource) {
     case "vehicles":
       return records.map((record) => ({

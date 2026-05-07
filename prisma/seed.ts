@@ -8,6 +8,8 @@ import { calculateVehicleFinancials } from "../lib/calculations";
 
 const prisma = new PrismaClient();
 
+const toSeedNumber = (value: number | { toString(): string } | null | undefined) => Number(value ?? 0);
+
 async function resetDatabase() {
   await prisma.aiAnalysis.deleteMany();
   await prisma.opportunityScore.deleteMany();
@@ -576,8 +578,11 @@ async function seedVehicles() {
       {
         categoryCode: ExpenseCategoryType.MECANICA,
         description: "Reparo inicial",
-        predictedAmount: Math.round((vehicle.repairsExpected ?? 0) * 0.6),
-        actualAmount: vehicle.status === VehicleStatus.VENDIDO ? Math.round((vehicle.repairsExpected ?? 0) * 0.8) : Math.round((vehicle.repairsExpected ?? 0) * 0.45),
+        predictedAmount: Math.round(toSeedNumber(vehicle.repairsExpected) * 0.6),
+        actualAmount:
+          vehicle.status === VehicleStatus.VENDIDO
+            ? Math.round(toSeedNumber(vehicle.repairsExpected) * 0.8)
+            : Math.round(toSeedNumber(vehicle.repairsExpected) * 0.45),
         paymentStatus: vehicle.status === VehicleStatus.ANALISE_LOTE ? PaymentStatus.PENDING : PaymentStatus.PARTIAL,
         paymentMethod: PaymentMethod.PIX
       }
@@ -669,11 +674,11 @@ async function seedVehicles() {
         vehicleId: vehicle.id,
         fipeValue: vehicle.fipeValue ?? undefined,
         marketAverage: vehicle.marketEstimatedValue ?? undefined,
-        lowestPrice: (vehicle.marketEstimatedValue ?? 0) * 0.94,
-        highestPrice: (vehicle.marketEstimatedValue ?? 0) * 1.05,
+        lowestPrice: toSeedNumber(vehicle.marketEstimatedValue) * 0.94,
+        highestPrice: toSeedNumber(vehicle.marketEstimatedValue) * 1.05,
         listingsCount: 18 - index,
-        suggestedCompetitivePrice: (vehicle.marketEstimatedValue ?? 0) * 0.985,
-        suggestedAggressivePrice: (vehicle.marketEstimatedValue ?? 0) * 0.96,
+        suggestedCompetitivePrice: toSeedNumber(vehicle.marketEstimatedValue) * 0.985,
+        suggestedAggressivePrice: toSeedNumber(vehicle.marketEstimatedValue) * 0.96,
         suggestedIdealPrice: vehicle.predictedSalePrice ?? undefined,
         minimumAcceptablePrice: calculations.priceMinimum,
         liquidityLevel: index <= 2 ? LiquidityLevel.HIGH : index === 3 ? LiquidityLevel.MEDIUM : LiquidityLevel.UNKNOWN,
@@ -694,7 +699,7 @@ async function seedVehicles() {
               marketSourceId: sourceMap.get(MarketSourceType.WEBMOTORS),
               source: MarketSourceType.WEBMOTORS,
               listingUrl: `https://www.webmotors.com.br/demo/${vehicle.stockCode}`,
-              price: (vehicle.marketEstimatedValue ?? 0) * 1.02,
+              price: toSeedNumber(vehicle.marketEstimatedValue) * 1.02,
               year: vehicle.modelYear ?? undefined,
               version: vehicle.version ?? undefined,
               mileage: vehicle.mileage ?? undefined,
@@ -707,7 +712,7 @@ async function seedVehicles() {
               marketSourceId: sourceMap.get(MarketSourceType.OLX),
               source: MarketSourceType.OLX,
               listingUrl: `https://www.olx.com.br/demo/${vehicle.stockCode}`,
-              price: (vehicle.marketEstimatedValue ?? 0) * 0.97,
+              price: toSeedNumber(vehicle.marketEstimatedValue) * 0.97,
               year: vehicle.modelYear ?? undefined,
               version: vehicle.version ?? undefined,
               mileage: vehicle.mileage ?? undefined,
@@ -764,7 +769,8 @@ async function seedVehicles() {
     }
 
     const score = calculateOpportunityScore({
-      discountToFipePercent: ((vehicle.fipeValue ?? 0) - (vehicle.bidValue ?? 0)) / Math.max(vehicle.fipeValue ?? 1, 1) * 100,
+      discountToFipePercent:
+        ((toSeedNumber(vehicle.fipeValue) - toSeedNumber(vehicle.bidValue)) / Math.max(toSeedNumber(vehicle.fipeValue), 1)) * 100,
       projectedMarginPercent: calculations.predictedMargin,
       repairEaseScore: index === 0 ? 54 : 72,
       liquidityScore: index <= 2 ? 82 : 57,
@@ -808,7 +814,7 @@ async function seedVehicles() {
       fuel: vehicle.fuel,
       transmission: vehicle.transmission,
       differentials: ["historico organizado", "pronto para anuncio", "precificacao competitiva"],
-      price: vehicle.predictedSalePrice,
+      price: vehicle.predictedSalePrice == null ? undefined : toSeedNumber(vehicle.predictedSalePrice),
       notes: vehicle.notes,
       condition: vehicle.condition
     });
@@ -833,7 +839,10 @@ async function seedVehicles() {
           type: CashFlowType.OUT,
           status: CashFlowStatus.REALIZED,
           description: "Arremate e taxas iniciais",
-          amount: (vehicle.bidValue ?? 0) + (vehicle.auctionCommission ?? 0) + (vehicle.administrativeFees ?? 0),
+          amount:
+            toSeedNumber(vehicle.bidValue) +
+            toSeedNumber(vehicle.auctionCommission) +
+            toSeedNumber(vehicle.administrativeFees),
           occurredAt: vehicle.bidDate ?? new Date(),
           paymentMethod: PaymentMethod.TRANSFER
         },
@@ -842,7 +851,7 @@ async function seedVehicles() {
           type: CashFlowType.OUT,
           status: CashFlowStatus.PROJECTED,
           description: "Reparos e documentacao",
-          amount: (vehicle.repairsExpected ?? 0) + (vehicle.documentationExpected ?? 0),
+          amount: toSeedNumber(vehicle.repairsExpected) + toSeedNumber(vehicle.documentationExpected),
           expectedAt: new Date(),
           paymentMethod: PaymentMethod.PIX
         }

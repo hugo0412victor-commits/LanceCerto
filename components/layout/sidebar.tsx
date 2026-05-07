@@ -46,7 +46,7 @@ export function Sidebar({ systemName }: { systemName: string }) {
       <nav className="mt-6 flex flex-1 flex-col gap-2">
         {items.map((item) => {
           const Icon = item.icon;
-          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const active = pathname === item.href || pathname?.startsWith(`${item.href}/`);
 
           return (
             <Link

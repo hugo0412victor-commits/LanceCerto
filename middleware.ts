@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { withAuth } from "next-auth/middleware";
+import { NextFetchEvent, NextRequest, NextResponse } from "next/server";
+import { type NextRequestWithAuth, withAuth } from "next-auth/middleware";
 import { localAuthBypassEnabled } from "@/lib/auth-mode";
 
 const authMiddleware = withAuth({
@@ -8,12 +8,12 @@ const authMiddleware = withAuth({
   }
 });
 
-export default function middleware(request: Request) {
+export default function middleware(request: NextRequest, event: NextFetchEvent) {
   if (localAuthBypassEnabled) {
     return NextResponse.next();
   }
 
-  return authMiddleware(request as never);
+  return authMiddleware(request as NextRequestWithAuth, event);
 }
 
 export const config = {

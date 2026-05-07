@@ -126,9 +126,23 @@ export async function getDashboardData() {
     }
   });
 
+  const inactiveStatuses: VehicleStatus[] = [VehicleStatus.VENDIDO, VehicleStatus.FINALIZADO, VehicleStatus.CANCELADO];
+  const preparationStatuses: VehicleStatus[] = [
+    VehicleStatus.ARREMATADO,
+    VehicleStatus.PAGO,
+    VehicleStatus.AGUARDANDO_RETIRADA,
+    VehicleStatus.RETIRADO,
+    VehicleStatus.VISTORIA_INICIAL,
+    VehicleStatus.ORCAMENTO_REPAROS,
+    VehicleStatus.MECANICA,
+    VehicleStatus.FUNILARIA,
+    VehicleStatus.PINTURA,
+    VehicleStatus.ESTETICA
+  ];
+
   const totalInvested = vehicles.reduce((total, vehicle) => total + toNumber(vehicle.totalActualCost || vehicle.totalPredictedCost), 0);
   const capitalParado = vehicles
-    .filter((vehicle) => ![VehicleStatus.VENDIDO, VehicleStatus.FINALIZADO, VehicleStatus.CANCELADO].includes(vehicle.status))
+    .filter((vehicle) => !inactiveStatuses.includes(vehicle.status))
     .reduce((total, vehicle) => total + toNumber(vehicle.totalActualCost || vehicle.totalPredictedCost), 0);
   const retornoPrevisto = vehicles.reduce((total, vehicle) => total + toNumber(vehicle.predictedSalePrice), 0);
   const lucroPrevisto = vehicles.reduce((total, vehicle) => total + toNumber(vehicle.predictedProfit), 0);
@@ -140,20 +154,7 @@ export async function getDashboardData() {
     soldVehicles.length > 0
       ? soldVehicles.reduce((total, vehicle) => total + toNumber(vehicle.sale?.netMargin ?? vehicle.actualMargin), 0) / soldVehicles.length
       : 0;
-  const vehiclesInPreparation = vehicles.filter((vehicle) =>
-    [
-      VehicleStatus.ARREMATADO,
-      VehicleStatus.PAGO,
-      VehicleStatus.AGUARDANDO_RETIRADA,
-      VehicleStatus.RETIRADO,
-      VehicleStatus.VISTORIA_INICIAL,
-      VehicleStatus.ORCAMENTO_REPAROS,
-      VehicleStatus.MECANICA,
-      VehicleStatus.FUNILARIA,
-      VehicleStatus.PINTURA,
-      VehicleStatus.ESTETICA
-    ].includes(vehicle.status)
-  ).length;
+  const vehiclesInPreparation = vehicles.filter((vehicle) => preparationStatuses.includes(vehicle.status)).length;
   const vehiclesAdvertised = vehicles.filter((vehicle) => vehicle.status === VehicleStatus.ANUNCIADO).length;
   const vehiclesSold = vehicles.filter((vehicle) => vehicle.status === VehicleStatus.VENDIDO || vehicle.status === VehicleStatus.FINALIZADO).length;
   const averageTurnover =

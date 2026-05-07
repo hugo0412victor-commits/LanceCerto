@@ -10,7 +10,7 @@ import { localAuthBypassEnabled } from "@/lib/auth-mode";
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard";
+  const callbackUrl = searchParams?.get("callbackUrl") ?? "/dashboard";
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

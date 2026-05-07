@@ -1,6 +1,7 @@
 import { LoginForm } from "@/components/auth/login-form";
 import { Award, BarChart3, CheckCircle2, ShieldCheck } from "lucide-react";
 import { LanceCertoLogo } from "@/components/brand/lancecerto-logo";
+import { Suspense } from "react";
 
 export default async function LoginPage() {
   return (
@@ -38,7 +39,9 @@ export default async function LoginPage() {
             Use uma conta cadastrada para acessar o painel de gestão, operação e performance comercial.
           </p>
           <div className="mt-8">
-            <LoginForm />
+            <Suspense fallback={null}>
+              <LoginForm />
+            </Suspense>
           </div>
         </section>
       </div>

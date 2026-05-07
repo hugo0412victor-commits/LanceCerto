@@ -47,7 +47,7 @@ function roundMoney(value: number) {
 }
 
 export function sumValues(...values: Array<number | null | undefined>) {
-  return values.reduce((total, current) => total + toNumber(current), 0);
+  return values.reduce<number>((total, current) => total + toNumber(current), 0);
 }
 
 export function calculateVehicleFinancials(input: CalculationInput) {

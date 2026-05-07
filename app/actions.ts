@@ -138,23 +138,23 @@ export async function saveVehicleAction(formData: FormData) {
 
   const data = {
     ...normalizedPayload,
-    fipeValue: normalizeMoneyValue(normalizedPayload.fipeValue),
-    marketEstimatedValue: normalizeMoneyValue(normalizedPayload.marketEstimatedValue),
-    bidValue: normalizeMoneyValue(normalizedPayload.bidValue),
-    auctionCommission: normalizeMoneyValue(normalizedPayload.auctionCommission),
-    administrativeFees: normalizeMoneyValue(normalizedPayload.administrativeFees),
-    yardCost: normalizeMoneyValue(normalizedPayload.yardCost),
-    towCost: normalizeMoneyValue(normalizedPayload.towCost),
-    documentationExpected: normalizeMoneyValue(normalizedPayload.documentationExpected),
-    repairsExpected: normalizeMoneyValue(normalizedPayload.repairsExpected),
-    predictedSalePrice: normalizeMoneyValue(normalizedPayload.predictedSalePrice),
-    totalPredictedCost: normalizeMoneyValue(calculations.totalPredictedCost),
-    totalActualCost: normalizeMoneyValue(calculations.totalActualCost),
-    predictedProfit: normalizeMoneyValue(calculations.predictedProfit),
-    predictedMargin: normalizeMoneyValue(calculations.predictedMargin),
-    predictedRoi: normalizeMoneyValue(calculations.predictedRoi),
-    minimumAcceptablePrice: normalizeMoneyValue(calculations.priceMinimum),
-    maxRecommendedBid: normalizeMoneyValue(maxBidSet.moderate),
+    fipeValue: normalizeMoneyValue(normalizedPayload.fipeValue ?? undefined),
+    marketEstimatedValue: normalizeMoneyValue(normalizedPayload.marketEstimatedValue ?? undefined),
+    bidValue: normalizeMoneyValue(normalizedPayload.bidValue ?? undefined),
+    auctionCommission: normalizeMoneyValue(normalizedPayload.auctionCommission ?? undefined),
+    administrativeFees: normalizeMoneyValue(normalizedPayload.administrativeFees ?? undefined),
+    yardCost: normalizeMoneyValue(normalizedPayload.yardCost ?? undefined),
+    towCost: normalizeMoneyValue(normalizedPayload.towCost ?? undefined),
+    documentationExpected: normalizeMoneyValue(normalizedPayload.documentationExpected ?? undefined),
+    repairsExpected: normalizeMoneyValue(normalizedPayload.repairsExpected ?? undefined),
+    predictedSalePrice: normalizeMoneyValue(normalizedPayload.predictedSalePrice ?? undefined),
+    totalPredictedCost: normalizeMoneyValue(calculations.totalPredictedCost ?? undefined),
+    totalActualCost: normalizeMoneyValue(calculations.totalActualCost ?? undefined),
+    predictedProfit: normalizeMoneyValue(calculations.predictedProfit ?? undefined),
+    predictedMargin: normalizeMoneyValue(calculations.predictedMargin ?? undefined),
+    predictedRoi: normalizeMoneyValue(calculations.predictedRoi ?? undefined),
+    minimumAcceptablePrice: normalizeMoneyValue(calculations.priceMinimum ?? undefined),
+    maxRecommendedBid: normalizeMoneyValue(maxBidSet.moderate ?? undefined),
     snapshotConfirmed: payload.snapshotConfirmed,
     snapshotDate: payload.snapshotDate,
     completenessPercent: Math.max(10, 100 - pendingFields.length * 12),
@@ -272,7 +272,7 @@ export async function saveVehicleAction(formData: FormData) {
         version: payload.version,
         manufacturingYear: payload.manufacturingYear,
         modelYear: payload.modelYear,
-        informedFipe: normalizeMoneyValue(payload.fipeValue),
+        informedFipe: normalizeMoneyValue(payload.fipeValue ?? undefined),
         documentType: payload.documentType,
         mountType: payload.mountType,
         condition: payload.condition,
@@ -325,15 +325,15 @@ export async function saveExpenseAction(formData: FormData) {
         where: { id },
         data: {
           ...payload,
-          predictedAmount: normalizeMoneyValue(payload.predictedAmount),
-          actualAmount: normalizeMoneyValue(payload.actualAmount)
+          predictedAmount: normalizeMoneyValue(payload.predictedAmount ?? undefined),
+          actualAmount: normalizeMoneyValue(payload.actualAmount ?? undefined)
         }
       })
     : await prisma.expense.create({
         data: {
           ...payload,
-          predictedAmount: normalizeMoneyValue(payload.predictedAmount),
-          actualAmount: normalizeMoneyValue(payload.actualAmount)
+          predictedAmount: normalizeMoneyValue(payload.predictedAmount ?? undefined),
+          actualAmount: normalizeMoneyValue(payload.actualAmount ?? undefined)
         }
       });
 
@@ -367,14 +367,14 @@ export async function saveExpenseAction(formData: FormData) {
         id: vehicle.id
       },
       data: {
-        totalPredictedCost: normalizeMoneyValue(financials.totalPredictedCost),
-        totalActualCost: normalizeMoneyValue(financials.totalActualCost),
-        predictedProfit: normalizeMoneyValue(financials.predictedProfit),
-        actualProfit: normalizeMoneyValue(financials.actualProfit),
-        predictedMargin: normalizeMoneyValue(financials.predictedMargin),
-        actualMargin: normalizeMoneyValue(financials.actualMargin),
-        predictedRoi: normalizeMoneyValue(financials.predictedRoi),
-        actualRoi: normalizeMoneyValue(financials.actualRoi)
+        totalPredictedCost: normalizeMoneyValue(financials.totalPredictedCost ?? undefined),
+        totalActualCost: normalizeMoneyValue(financials.totalActualCost ?? undefined),
+        predictedProfit: normalizeMoneyValue(financials.predictedProfit ?? undefined),
+        actualProfit: normalizeMoneyValue(financials.actualProfit ?? undefined),
+        predictedMargin: normalizeMoneyValue(financials.predictedMargin ?? undefined),
+        actualMargin: normalizeMoneyValue(financials.actualMargin ?? undefined),
+        predictedRoi: normalizeMoneyValue(financials.predictedRoi ?? undefined),
+        actualRoi: normalizeMoneyValue(financials.actualRoi ?? undefined)
       }
     });
   }
@@ -414,13 +414,13 @@ export async function saveSupplierAction(formData: FormData) {
         where: { id },
         data: {
           ...payload,
-          averageCost: normalizeMoneyValue(payload.averageCost)
+          averageCost: normalizeMoneyValue(payload.averageCost ?? undefined)
         }
       })
     : await prisma.supplier.create({
         data: {
           ...payload,
-          averageCost: normalizeMoneyValue(payload.averageCost)
+          averageCost: normalizeMoneyValue(payload.averageCost ?? undefined)
         }
       });
 
@@ -486,26 +486,26 @@ export async function saveSimulationAction(formData: FormData) {
   const simulation = await prisma.simulation.create({
     data: {
       ...payload,
-      fipeValue: normalizeMoneyValue(payload.fipeValue),
-      marketAverageValue: normalizeMoneyValue(payload.marketAverageValue),
-      intendedBid: normalizeMoneyValue(payload.intendedBid),
-      auctionCommission: normalizeMoneyValue(payload.auctionCommission),
-      administrativeFees: normalizeMoneyValue(payload.administrativeFees),
-      yardCost: normalizeMoneyValue(payload.yardCost),
-      towCost: normalizeMoneyValue(payload.towCost),
-      documentationCost: normalizeMoneyValue(payload.documentationCost),
-      estimatedRepairs: normalizeMoneyValue(payload.estimatedRepairs),
-      desiredMargin: normalizeMoneyValue(payload.desiredMargin),
-      predictedSalePrice: normalizeMoneyValue(payload.predictedSalePrice),
-      desiredDiscountOnFipe: normalizeMoneyValue(payload.desiredDiscountOnFipe),
-      totalPredictedCost: normalizeMoneyValue(calculations.totalPredictedCost),
-      predictedProfit: normalizeMoneyValue(calculations.predictedProfit),
-      predictedMargin: normalizeMoneyValue(calculations.predictedMargin),
-      predictedRoi: normalizeMoneyValue(calculations.predictedRoi),
-      minimumSellingPrice: normalizeMoneyValue(calculations.priceMinimum),
-      idealSellingPrice: normalizeMoneyValue(calculations.priceIdeal),
-      aggressiveSellingPrice: normalizeMoneyValue(calculations.priceAggressive),
-      recommendedMaxBid: normalizeMoneyValue(calculations.recommendedMaxBid),
+      fipeValue: normalizeMoneyValue(payload.fipeValue ?? undefined),
+      marketAverageValue: normalizeMoneyValue(payload.marketAverageValue ?? undefined),
+      intendedBid: normalizeMoneyValue(payload.intendedBid ?? undefined),
+      auctionCommission: normalizeMoneyValue(payload.auctionCommission ?? undefined),
+      administrativeFees: normalizeMoneyValue(payload.administrativeFees ?? undefined),
+      yardCost: normalizeMoneyValue(payload.yardCost ?? undefined),
+      towCost: normalizeMoneyValue(payload.towCost ?? undefined),
+      documentationCost: normalizeMoneyValue(payload.documentationCost ?? undefined),
+      estimatedRepairs: normalizeMoneyValue(payload.estimatedRepairs ?? undefined),
+      desiredMargin: normalizeMoneyValue(payload.desiredMargin ?? undefined),
+      predictedSalePrice: normalizeMoneyValue(payload.predictedSalePrice ?? undefined),
+      desiredDiscountOnFipe: normalizeMoneyValue(payload.desiredDiscountOnFipe ?? undefined),
+      totalPredictedCost: normalizeMoneyValue(calculations.totalPredictedCost ?? undefined),
+      predictedProfit: normalizeMoneyValue(calculations.predictedProfit ?? undefined),
+      predictedMargin: normalizeMoneyValue(calculations.predictedMargin ?? undefined),
+      predictedRoi: normalizeMoneyValue(calculations.predictedRoi ?? undefined),
+      minimumSellingPrice: normalizeMoneyValue(calculations.priceMinimum ?? undefined),
+      idealSellingPrice: normalizeMoneyValue(calculations.priceIdeal ?? undefined),
+      aggressiveSellingPrice: normalizeMoneyValue(calculations.priceAggressive ?? undefined),
+      recommendedMaxBid: normalizeMoneyValue(calculations.recommendedMaxBid ?? undefined),
       recommendation
     }
   });
@@ -531,15 +531,15 @@ export async function saveMarketResearchAction(formData: FormData) {
   const research = await prisma.marketResearch.create({
     data: {
       vehicleId,
-      fipeValue: normalizeMoneyValue(parseNumber(formData.get("fipeValue"))),
-      marketAverage: normalizeMoneyValue(parseNumber(formData.get("marketAverage"))),
-      lowestPrice: normalizeMoneyValue(parseNumber(formData.get("lowestPrice"))),
-      highestPrice: normalizeMoneyValue(parseNumber(formData.get("highestPrice"))),
+      fipeValue: normalizeMoneyValue(parseNumber(formData.get("fipeValue")) ?? undefined),
+      marketAverage: normalizeMoneyValue(parseNumber(formData.get("marketAverage")) ?? undefined),
+      lowestPrice: normalizeMoneyValue(parseNumber(formData.get("lowestPrice")) ?? undefined),
+      highestPrice: normalizeMoneyValue(parseNumber(formData.get("highestPrice")) ?? undefined),
       listingsCount: parseInteger(formData.get("listingsCount")) ?? 1,
-      suggestedCompetitivePrice: normalizeMoneyValue(parseNumber(formData.get("suggestedCompetitivePrice"))),
-      suggestedAggressivePrice: normalizeMoneyValue(parseNumber(formData.get("suggestedAggressivePrice"))),
-      suggestedIdealPrice: normalizeMoneyValue(parseNumber(formData.get("suggestedIdealPrice"))),
-      minimumAcceptablePrice: normalizeMoneyValue(parseNumber(formData.get("minimumAcceptablePrice"))),
+      suggestedCompetitivePrice: normalizeMoneyValue(parseNumber(formData.get("suggestedCompetitivePrice")) ?? undefined),
+      suggestedAggressivePrice: normalizeMoneyValue(parseNumber(formData.get("suggestedAggressivePrice")) ?? undefined),
+      suggestedIdealPrice: normalizeMoneyValue(parseNumber(formData.get("suggestedIdealPrice")) ?? undefined),
+      minimumAcceptablePrice: normalizeMoneyValue(parseNumber(formData.get("minimumAcceptablePrice")) ?? undefined),
       liquidityLevel: (String(formData.get("liquidityLevel") ?? LiquidityLevel.UNKNOWN) as LiquidityLevel) ?? LiquidityLevel.UNKNOWN,
       notes: String(formData.get("notes") ?? "").trim() || undefined,
       sourceStatus: {
@@ -550,7 +550,7 @@ export async function saveMarketResearchAction(formData: FormData) {
           source: source as MarketSourceType,
           marketSourceId: String(formData.get("marketSourceId") ?? "").trim() || undefined,
           listingUrl: String(formData.get("listingUrl") ?? "").trim() || undefined,
-          price: normalizeMoneyValue(price),
+          price: normalizeMoneyValue(price ?? undefined),
           year: parseInteger(formData.get("year")),
           version: String(formData.get("version") ?? "").trim() || undefined,
           mileage: parseInteger(formData.get("mileage")),
@@ -610,41 +610,41 @@ export async function saveSaleAction(formData: FormData) {
     },
     update: {
       soldAt: parseDate(formData.get("soldAt")),
-      listedPrice: normalizeMoneyValue(listedPrice),
-      soldPrice: normalizeMoneyValue(soldPrice),
-      discountGranted: normalizeMoneyValue(discountGranted),
+      listedPrice: normalizeMoneyValue(listedPrice ?? undefined),
+      soldPrice: normalizeMoneyValue(soldPrice ?? undefined),
+      discountGranted: normalizeMoneyValue(discountGranted ?? undefined),
       buyerName: String(formData.get("buyerName") ?? "").trim() || undefined,
       saleChannel: String(formData.get("saleChannel") ?? "").trim() || undefined,
-      salesCommission: normalizeMoneyValue(salesCommission),
-      taxes: normalizeMoneyValue(taxes),
+      salesCommission: normalizeMoneyValue(salesCommission ?? undefined),
+      taxes: normalizeMoneyValue(taxes ?? undefined),
       paymentMethod: (String(formData.get("paymentMethod") ?? "") as PaymentMethod) || undefined,
       notes: String(formData.get("notes") ?? "").trim() || undefined,
       transferDate: parseDate(formData.get("transferDate")),
       transferStatus: String(formData.get("transferStatus") ?? "").trim() || undefined,
-      grossProfit: normalizeMoneyValue(grossProfit),
-      netProfit: normalizeMoneyValue(netProfit),
-      netMargin: normalizeMoneyValue(netMargin),
-      roi: normalizeMoneyValue(roi),
+      grossProfit: normalizeMoneyValue(grossProfit ?? undefined),
+      netProfit: normalizeMoneyValue(netProfit ?? undefined),
+      netMargin: normalizeMoneyValue(netMargin ?? undefined),
+      roi: normalizeMoneyValue(roi ?? undefined),
       daysToSale
     },
     create: {
       vehicleId,
       soldAt: parseDate(formData.get("soldAt")),
-      listedPrice: normalizeMoneyValue(listedPrice),
-      soldPrice: normalizeMoneyValue(soldPrice),
-      discountGranted: normalizeMoneyValue(discountGranted),
+      listedPrice: normalizeMoneyValue(listedPrice ?? undefined),
+      soldPrice: normalizeMoneyValue(soldPrice ?? undefined),
+      discountGranted: normalizeMoneyValue(discountGranted ?? undefined),
       buyerName: String(formData.get("buyerName") ?? "").trim() || undefined,
       saleChannel: String(formData.get("saleChannel") ?? "").trim() || undefined,
-      salesCommission: normalizeMoneyValue(salesCommission),
-      taxes: normalizeMoneyValue(taxes),
+      salesCommission: normalizeMoneyValue(salesCommission ?? undefined),
+      taxes: normalizeMoneyValue(taxes ?? undefined),
       paymentMethod: (String(formData.get("paymentMethod") ?? "") as PaymentMethod) || undefined,
       notes: String(formData.get("notes") ?? "").trim() || undefined,
       transferDate: parseDate(formData.get("transferDate")),
       transferStatus: String(formData.get("transferStatus") ?? "").trim() || undefined,
-      grossProfit: normalizeMoneyValue(grossProfit),
-      netProfit: normalizeMoneyValue(netProfit),
-      netMargin: normalizeMoneyValue(netMargin),
-      roi: normalizeMoneyValue(roi),
+      grossProfit: normalizeMoneyValue(grossProfit ?? undefined),
+      netProfit: normalizeMoneyValue(netProfit ?? undefined),
+      netMargin: normalizeMoneyValue(netMargin ?? undefined),
+      roi: normalizeMoneyValue(roi ?? undefined),
       daysToSale
     }
   });
@@ -653,10 +653,10 @@ export async function saveSaleAction(formData: FormData) {
     where: { id: vehicleId },
     data: {
       status: VehicleStatus.VENDIDO,
-      actualSalePrice: normalizeMoneyValue(soldPrice),
-      actualProfit: normalizeMoneyValue(netProfit),
-      actualMargin: normalizeMoneyValue(netMargin),
-      actualRoi: normalizeMoneyValue(roi)
+      actualSalePrice: normalizeMoneyValue(soldPrice ?? undefined),
+      actualProfit: normalizeMoneyValue(netProfit ?? undefined),
+      actualMargin: normalizeMoneyValue(netMargin ?? undefined),
+      actualRoi: normalizeMoneyValue(roi ?? undefined)
     }
   });
 
@@ -935,14 +935,14 @@ export async function deleteExpenseAction(formData: FormData) {
           id: vehicle.id
         },
         data: {
-          totalPredictedCost: normalizeMoneyValue(financials.totalPredictedCost),
-          totalActualCost: normalizeMoneyValue(financials.totalActualCost),
-          predictedProfit: normalizeMoneyValue(financials.predictedProfit),
-          actualProfit: normalizeMoneyValue(financials.actualProfit),
-          predictedMargin: normalizeMoneyValue(financials.predictedMargin),
-          actualMargin: normalizeMoneyValue(financials.actualMargin),
-          predictedRoi: normalizeMoneyValue(financials.predictedRoi),
-          actualRoi: normalizeMoneyValue(financials.actualRoi)
+          totalPredictedCost: normalizeMoneyValue(financials.totalPredictedCost ?? undefined),
+          totalActualCost: normalizeMoneyValue(financials.totalActualCost ?? undefined),
+          predictedProfit: normalizeMoneyValue(financials.predictedProfit ?? undefined),
+          actualProfit: normalizeMoneyValue(financials.actualProfit ?? undefined),
+          predictedMargin: normalizeMoneyValue(financials.predictedMargin ?? undefined),
+          actualMargin: normalizeMoneyValue(financials.actualMargin ?? undefined),
+          predictedRoi: normalizeMoneyValue(financials.predictedRoi ?? undefined),
+          actualRoi: normalizeMoneyValue(financials.actualRoi ?? undefined)
         }
       });
     }

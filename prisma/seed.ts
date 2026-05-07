@@ -10,7 +10,7 @@ const prisma = new PrismaClient();
 
 const toSeedNumber = (value: number | { toString(): string } | null | undefined) => Number(value ?? 0);
 
-const REQUIRED_AUTH_ROLES = [UserRoleCode.ADMIN] as const;
+const REQUIRED_AUTH_ROLES = [UserRoleCode.ADMIN, UserRoleCode.MANAGER, UserRoleCode.VIEWER] as const;
 
 const ROLE_PERMISSIONS: Record<(typeof REQUIRED_AUTH_ROLES)[number], Record<string, boolean>> = {
   [UserRoleCode.ADMIN]: {
@@ -19,31 +19,43 @@ const ROLE_PERMISSIONS: Record<(typeof REQUIRED_AUTH_ROLES)[number], Record<stri
     update: true,
     delete: true,
     manageSettings: true
+  },
+  [UserRoleCode.MANAGER]: {
+    read: true,
+    create: true,
+    update: true,
+    delete: false,
+    manageSettings: false
+  },
+  [UserRoleCode.VIEWER]: {
+    read: true,
+    create: false,
+    update: false,
+    delete: false,
+    manageSettings: false
   }
 };
 
 const INITIAL_USERS = [
   {
-    name: "Victor",
-    email: "victor@gestaolancecerto.com",
-    password: "victor@123!",
+    name: "Administrador",
+    email: "admin@lancecerto.com.br",
+    password: "Admin@12345",
     role: UserRoleCode.ADMIN
   },
   {
-    name: "Andre",
-    email: "andre@gestaolancecerto.com",
-    password: "andre@123!",
-    role: UserRoleCode.ADMIN
+    name: "Gestor",
+    email: "gestor@lancecerto.com.br",
+    password: "Gestor@12345",
+    role: UserRoleCode.MANAGER
   },
   {
-    name: "Kelvin",
-    email: "kelvin@gestaolancecerto.com",
-    password: "kelvin@123!",
-    role: UserRoleCode.ADMIN
+    name: "Consulta",
+    email: "consulta@lancecerto.com.br",
+    password: "Consulta@12345",
+    role: UserRoleCode.VIEWER
   }
 ] as const;
-
-const LEGACY_USER_EMAILS = ["admin@lancecerto.com.br", "gestor@lancecerto.com.br", "consulta@lancecerto.com.br"] as const;
 
 async function resetDatabase() {
   await prisma.aiAnalysis.deleteMany();
@@ -252,6 +264,10 @@ async function seedAuthUsers() {
   const roleMap = new Map<UserRoleCode, string>();
 
   for (const roleCode of REQUIRED_AUTH_ROLES) {
+    await prisma.$executeRawUnsafe(`ALTER TYPE "UserRoleCode" ADD VALUE IF NOT EXISTS '${roleCode}'`);
+  }
+
+  for (const roleCode of REQUIRED_AUTH_ROLES) {
     const role = await prisma.role.upsert({
       where: {
         code: roleCode
@@ -271,17 +287,6 @@ async function seedAuthUsers() {
 
     roleMap.set(roleCode, role.id);
   }
-
-  await prisma.user.updateMany({
-    where: {
-      email: {
-        in: [...LEGACY_USER_EMAILS]
-      }
-    },
-    data: {
-      active: false
-    }
-  });
 
   for (const user of INITIAL_USERS) {
     const roleId = roleMap.get(user.role);
@@ -399,7 +404,7 @@ async function seedVehicles() {
       administrativeFees: 1100,
       yardCost: 0,
       towCost: 450,
-      documentationExpected: 1200,
+      documentationExpected: 0,
       repairsExpected: 3200,
       predictedSalePrice: 52900,
       notes: "Veiculo pronto para funil comercial e fotos de anuncio."

@@ -111,7 +111,7 @@ function buildVehicleDefaults(vehicle?: VehicleOption): FormState {
     administrativeFees: formatInputNumber(vehicle?.administrativeFees ?? LOT_ANALYSIS_DEFAULTS.originExpensesCost),
     yardCost: formatInputNumber(vehicle?.yardCost ?? 0),
     towCost: formatInputNumber(vehicle?.towCost ?? 0),
-    documentationCost: formatInputNumber(vehicle?.documentationExpected ?? LOT_ANALYSIS_DEFAULTS.dsalCost),
+    documentationCost: formatInputNumber(vehicle?.documentationExpected ?? undefined),
     estimatedRepairs: formatInputNumber(vehicle?.repairsExpected ?? 0),
     desiredMargin: formatInputNumber(LOT_ANALYSIS_DEFAULTS.desiredMarginPercent),
     predictedSalePrice: formatInputNumber(predictedSalePrice),
@@ -184,7 +184,7 @@ export function SimulationForm({ vehicles, action }: SimulationFormProps) {
 
   const previewRows = [
     { label: "Venda prevista", value: toNumber(form.predictedSalePrice) },
-    { label: "Custo total previsto", value: liveCalculations.totalPredictedCost },
+    { label: "Custo previsto", value: liveCalculations.totalPredictedCost },
     { label: "Lucro previsto", value: liveCalculations.predictedProfit },
     { label: "Margem prevista", value: liveCalculations.predictedMargin, type: "percent" as const },
     { label: "ROI previsto", value: liveCalculations.predictedRoi, type: "percent" as const },

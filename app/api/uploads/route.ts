@@ -6,6 +6,7 @@ import { getServerAuthSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { saveFileLocally } from "@/lib/storage";
 import { createAuditLog } from "@/lib/audit";
+import { canDelete, canWrite } from "@/lib/permissions";
 
 export async function POST(request: Request) {
   try {
@@ -13,6 +14,10 @@ export async function POST(request: Request) {
 
     if (!session) {
       return NextResponse.json({ error: "Nao autorizado" }, { status: 401 });
+    }
+
+    if (!canWrite(session.user.role)) {
+      return NextResponse.json({ error: "Permissao insuficiente para enviar arquivos." }, { status: 403 });
     }
 
     const formData = await request.formData();
@@ -116,6 +121,10 @@ export async function DELETE(request: Request) {
 
   if (!session) {
     return NextResponse.json({ error: "Nao autorizado" }, { status: 401 });
+  }
+
+  if (!canDelete(session.user.role)) {
+    return NextResponse.json({ error: "Permissao insuficiente para excluir arquivos." }, { status: 403 });
   }
 
   const { id, type } = (await request.json()) as { id?: string; type?: "document" | "photo" };

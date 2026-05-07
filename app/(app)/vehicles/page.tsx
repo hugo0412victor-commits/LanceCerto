@@ -44,7 +44,7 @@ export default async function VehiclesPage() {
                 <th className="px-4 py-3 font-medium">Veículo</th>
                 <th className="px-4 py-3 font-medium">Leiloeira</th>
                 <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Custo previsto</th>
+                <th className="px-4 py-3 font-medium">Custo atual</th>
                 <th className="px-4 py-3 font-medium">Venda prevista</th>
                 <th className="px-4 py-3 font-medium">Lucro previsto</th>
                 <th className="px-4 py-3 font-medium">Detalhe</th>
@@ -68,7 +68,7 @@ export default async function VehiclesPage() {
                   <td className="px-4 py-4">
                     <VehicleStatusBadge status={vehicle.status as never} />
                   </td>
-                  <td className="px-4 py-4 font-semibold">{formatCurrency(Number(vehicle.totalPredictedCost ?? 0))}</td>
+                  <td className="px-4 py-4 font-semibold">{formatCurrency(Number(vehicle.totalActualCost ?? vehicle.totalPredictedCost ?? 0))}</td>
                   <td className="px-4 py-4 font-semibold">{formatCurrency(Number(vehicle.predictedSalePrice ?? 0))}</td>
                   <td className="px-4 py-4 font-semibold text-primary">{formatCurrency(Number(vehicle.predictedProfit ?? 0))}</td>
                   <td className="px-4 py-4">

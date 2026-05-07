@@ -28,7 +28,7 @@ type LotAnalysisViabilityInput = {
 export const LOT_ANALYSIS_DEFAULTS = {
   auctioneerCommissionPercent: 5,
   desiredMarginPercent: 20,
-  dsalCost: 1200,
+  dsalCost: 0,
   originExpensesCost: 250,
   saleDiscountOnFipePercent: 20
 } as const;
@@ -122,12 +122,13 @@ export function deriveLotAnalysisViability(input: LotAnalysisViabilityInput) {
         : undefined);
 
   const administrativeFees = informedFees ?? LOT_ANALYSIS_DEFAULTS.originExpensesCost;
-  const documentationCost = informedDocs ?? LOT_ANALYSIS_DEFAULTS.dsalCost;
+  const documentationCost =
+    informedDocs ?? (LOT_ANALYSIS_DEFAULTS.dsalCost > 0 ? LOT_ANALYSIS_DEFAULTS.dsalCost : undefined);
 
   let bidValue = informedBid;
   if (bidValue === undefined && predictedSalePrice !== undefined) {
     const maxTotalCost = predictedSalePrice * (1 - LOT_ANALYSIS_DEFAULTS.desiredMarginPercent / 100);
-    const fixedCosts = administrativeFees + documentationCost;
+    const fixedCosts = administrativeFees + (documentationCost ?? 0);
     const commissionFactor = 1 + LOT_ANALYSIS_DEFAULTS.auctioneerCommissionPercent / 100;
     bidValue = roundMoney(Math.max((maxTotalCost - fixedCosts) / commissionFactor, 0));
   }
@@ -160,7 +161,9 @@ export function deriveLotAnalysisViability(input: LotAnalysisViabilityInput) {
       assumptionsApplied.auctionCommission
         ? `Corretagem do leiloeiro estimada em ${LOT_ANALYSIS_DEFAULTS.auctioneerCommissionPercent}%`
         : null,
-      assumptionsApplied.documentationCost ? `DSAL estimado em R$ ${LOT_ANALYSIS_DEFAULTS.dsalCost.toLocaleString("pt-BR")}` : null,
+      assumptionsApplied.documentationCost && documentationCost
+        ? `DSAL estimado em R$ ${documentationCost.toLocaleString("pt-BR")}`
+        : null,
       assumptionsApplied.administrativeFees
         ? `Despesas de origem estimadas em R$ ${LOT_ANALYSIS_DEFAULTS.originExpensesCost.toLocaleString("pt-BR")}`
         : null,

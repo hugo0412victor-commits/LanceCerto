@@ -9,6 +9,8 @@ import { calculateOpportunityScore } from "@/lib/scoring";
 import { generateLotRiskAnalysis } from "@/lib/ai";
 import { runAutomaticMarketResearch } from "@/lib/market-research";
 import { AiAnalysisType, AiRiskLevel, MarketSourceType } from "@prisma/client";
+import { recalculateVehicleCostsFromExpenses, syncVehicleCoreExpenses } from "@/lib/vehicle-costs";
+import { canWrite } from "@/lib/permissions";
 
 export async function POST(request: Request) {
   try {
@@ -16,6 +18,10 @@ export async function POST(request: Request) {
 
     if (!session) {
       return NextResponse.json({ error: "Nao autorizado" }, { status: 401 });
+    }
+
+    if (!canWrite(session.user.role)) {
+      return NextResponse.json({ error: "Permissao insuficiente para importar lotes." }, { status: 403 });
     }
 
     const { url } = (await request.json()) as { url?: string };
@@ -123,6 +129,14 @@ export async function POST(request: Request) {
         alerts: aggregatedAlerts
       }
     });
+
+    await syncVehicleCoreExpenses(prisma, vehicle.id, {
+      bidValue: viability.bidValue,
+      auctionCommission: viability.auctionCommission,
+      administrativeFees: viability.administrativeFees,
+      documentationExpected: viability.documentationCost
+    });
+    await recalculateVehicleCostsFromExpenses(prisma, vehicle.id);
 
     const score = calculateOpportunityScore({
       discountToFipePercent:

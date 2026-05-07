@@ -13,6 +13,7 @@ import { INITIAL_INSPECTION_ITEMS, getInitialInspectionSummary } from "@/lib/ins
 import { VEHICLE_STATUS_LABELS } from "@/lib/constants";
 import { assertAdmin, assertCanDelete, assertCanWrite } from "@/lib/permissions";
 import { parseBoolean, parseDate, parseInteger, parseNumber } from "@/lib/utils";
+import { recalculateVehicleCostsFromExpenses, syncVehicleCoreExpenses } from "@/lib/vehicle-costs";
 
 function detectPendingVehicleFields(data: {
   brand?: string;
@@ -182,6 +183,9 @@ export async function saveVehicleAction(formData: FormData) {
         }
       });
 
+  await syncVehicleCoreExpenses(prisma, savedVehicle.id, normalizedPayload);
+  await recalculateVehicleCostsFromExpenses(prisma, savedVehicle.id);
+
   const score = calculateOpportunityScore({
     discountToFipePercent:
       normalizedPayload.fipeValue && normalizedPayload.bidValue ? ((normalizedPayload.fipeValue - normalizedPayload.bidValue) / normalizedPayload.fipeValue) * 100 : 0,
@@ -340,47 +344,7 @@ export async function saveExpenseAction(formData: FormData) {
         }
       });
 
-  const vehicle = await prisma.vehicle.findUnique({
-    where: { id: vehicleId },
-    include: {
-      expenses: true
-    }
-  });
-
-  if (vehicle) {
-    const actualCosts = vehicle.expenses.reduce((total, item) => total + Number(item.actualAmount ?? 0), 0);
-    const predictedCosts = vehicle.expenses.reduce((total, item) => total + Number(item.predictedAmount ?? 0), 0);
-
-    const financials = calculateVehicleFinancials({
-      bidValue: Number(vehicle.bidValue ?? 0),
-      auctionCommission: Number(vehicle.auctionCommission ?? 0),
-      administrativeFees: Number(vehicle.administrativeFees ?? 0),
-      yardCost: Number(vehicle.yardCost ?? 0),
-      towCost: Number(vehicle.towCost ?? 0),
-      documentationCost: Number(vehicle.documentationExpected ?? 0),
-      repairCost: Number(vehicle.repairsExpected ?? 0),
-      additionalPredictedCosts: predictedCosts,
-      additionalActualCosts: actualCosts,
-      predictedSalePrice: Number(vehicle.predictedSalePrice ?? 0),
-      actualSalePrice: Number(vehicle.actualSalePrice ?? 0)
-    });
-
-    await prisma.vehicle.update({
-      where: {
-        id: vehicle.id
-      },
-      data: {
-        totalPredictedCost: normalizeMoneyValue(financials.totalPredictedCost ?? undefined),
-        totalActualCost: normalizeMoneyValue(financials.totalActualCost ?? undefined),
-        predictedProfit: normalizeMoneyValue(financials.predictedProfit ?? undefined),
-        actualProfit: normalizeMoneyValue(financials.actualProfit ?? undefined),
-        predictedMargin: normalizeMoneyValue(financials.predictedMargin ?? undefined),
-        actualMargin: normalizeMoneyValue(financials.actualMargin ?? undefined),
-        predictedRoi: normalizeMoneyValue(financials.predictedRoi ?? undefined),
-        actualRoi: normalizeMoneyValue(financials.actualRoi ?? undefined)
-      }
-    });
-  }
+  await recalculateVehicleCostsFromExpenses(prisma, vehicleId);
 
   await createAuditLog({
     userId: session?.user.id,
@@ -916,47 +880,7 @@ export async function deleteExpenseAction(formData: FormData) {
   });
 
   if (vehicleId) {
-    const vehicle = await prisma.vehicle.findUnique({
-      where: { id: vehicleId },
-      include: {
-        expenses: true
-      }
-    });
-
-    if (vehicle) {
-      const actualCosts = vehicle.expenses.reduce((total, item) => total + Number(item.actualAmount ?? 0), 0);
-      const predictedCosts = vehicle.expenses.reduce((total, item) => total + Number(item.predictedAmount ?? 0), 0);
-
-      const financials = calculateVehicleFinancials({
-        bidValue: Number(vehicle.bidValue ?? 0),
-        auctionCommission: Number(vehicle.auctionCommission ?? 0),
-        administrativeFees: Number(vehicle.administrativeFees ?? 0),
-        yardCost: Number(vehicle.yardCost ?? 0),
-        towCost: Number(vehicle.towCost ?? 0),
-        documentationCost: Number(vehicle.documentationExpected ?? 0),
-        repairCost: Number(vehicle.repairsExpected ?? 0),
-        additionalPredictedCosts: predictedCosts,
-        additionalActualCosts: actualCosts,
-        predictedSalePrice: Number(vehicle.predictedSalePrice ?? 0),
-        actualSalePrice: Number(vehicle.actualSalePrice ?? 0)
-      });
-
-      await prisma.vehicle.update({
-        where: {
-          id: vehicle.id
-        },
-        data: {
-          totalPredictedCost: normalizeMoneyValue(financials.totalPredictedCost ?? undefined),
-          totalActualCost: normalizeMoneyValue(financials.totalActualCost ?? undefined),
-          predictedProfit: normalizeMoneyValue(financials.predictedProfit ?? undefined),
-          actualProfit: normalizeMoneyValue(financials.actualProfit ?? undefined),
-          predictedMargin: normalizeMoneyValue(financials.predictedMargin ?? undefined),
-          actualMargin: normalizeMoneyValue(financials.actualMargin ?? undefined),
-          predictedRoi: normalizeMoneyValue(financials.predictedRoi ?? undefined),
-          actualRoi: normalizeMoneyValue(financials.actualRoi ?? undefined)
-        }
-      });
-    }
+    await recalculateVehicleCostsFromExpenses(prisma, vehicleId);
   }
 
   await createAuditLog({

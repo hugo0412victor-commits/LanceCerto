@@ -16,6 +16,7 @@ import { formatCurrency, formatDate, formatDateTime, formatPercent } from "@/lib
 import { generateLotRiskAnalysis } from "@/lib/ai";
 import { INITIAL_INSPECTION_ITEMS, INSPECTION_ITEM_STATUS_OPTIONS, getInitialInspectionSummary, parseInitialInspectionPayload } from "@/lib/inspection";
 import { VehicleStatus } from "@/lib/prisma-enums";
+import { calculateExpenseTotals } from "@/lib/vehicle-costs";
 
 function formatDeltaPercent(base?: number | null, value?: number | null) {
   if (!base || !value) {
@@ -190,11 +191,29 @@ export default async function VehicleDetailPage({
   const fipeValue = Number(vehicle.fipeValue ?? 0);
   const bidValue = Number(vehicle.bidValue ?? 0);
   const predictedSalePriceValue = Number(vehicle.predictedSalePrice ?? 0);
-  const totalPredictedCostValue = Number(vehicle.totalPredictedCost ?? 0);
+  const expenseTotals = calculateExpenseTotals(vehicle.expenses);
+  const totalCurrentCostValue = expenseTotals.currentCost || Number(vehicle.totalActualCost ?? vehicle.totalPredictedCost ?? 0);
+  const totalPredictedCostValue = expenseTotals.predictedCost || Number(vehicle.totalPredictedCost ?? 0);
   const predictedProfitValue = Number(vehicle.predictedProfit ?? 0);
   const predictedMarginValue = Number(vehicle.predictedMargin ?? 0);
   const minimumAcceptablePriceValue =
-    totalPredictedCostValue > 0 ? totalPredictedCostValue * 1.1 : Number(vehicle.minimumAcceptablePrice ?? 0);
+    totalCurrentCostValue > 0 ? totalCurrentCostValue * 1.1 : Number(vehicle.minimumAcceptablePrice ?? 0);
+  const expensesByCategory = Object.values(
+    vehicle.expenses.reduce<Record<string, { name: string; total: number }>>((accumulator, expense) => {
+      const key = String(expense.category.code);
+      const amount = Number(expense.actualAmount ?? expense.predictedAmount ?? 0);
+
+      if (!accumulator[key]) {
+        accumulator[key] = {
+          name: expense.category.name,
+          total: 0
+        };
+      }
+
+      accumulator[key].total += amount;
+      return accumulator;
+    }, {})
+  );
   const financialSummaryCards = [
     {
       label: "FIPE",
@@ -212,9 +231,9 @@ export default async function VehicleDetailPage({
       detail: formatFipeShare(predictedSalePriceValue, fipeValue)
     },
     {
-      label: "Custo previsto",
-      value: formatCurrency(totalPredictedCostValue),
-      detail: formatFipeShare(totalPredictedCostValue, fipeValue)
+      label: "Custo atual",
+      value: formatCurrency(totalCurrentCostValue),
+      detail: formatFipeShare(totalCurrentCostValue, fipeValue)
     },
     {
       label: "Lucro previsto",
@@ -428,7 +447,8 @@ export default async function VehicleDetailPage({
           title="Leitura financeira"
           description="Explicação dos cálculos obrigatórios usados no projeto."
           rows={[
-            { label: "Custo total previsto", value: totalPredictedCostValue },
+            { label: "Custo atual", value: totalCurrentCostValue },
+            { label: "Custo previsto", value: totalPredictedCostValue },
             { label: "Lucro previsto", value: Number(vehicle.predictedProfit ?? 0) },
             { label: "Margem prevista", value: Number(vehicle.predictedMargin ?? 0), type: "percent" },
             { label: "ROI previsto", value: Number(vehicle.predictedRoi ?? 0), type: "percent" },
@@ -692,6 +712,11 @@ export default async function VehicleDetailPage({
         <Card>
           <CardHeader title="Histórico de gastos" description="Lançamentos vinculados ao veículo e impacto na margem." />
           <CardContent className="space-y-3">
+            {vehicle.expenses.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-border bg-white/60 p-4 text-sm text-muted">
+                Nenhum gasto registrado para este lote.
+              </div>
+            ) : null}
             {vehicle.expenses.map((expense) => (
               <div key={expense.id} className="rounded-3xl border border-border bg-white/75 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -716,6 +741,25 @@ export default async function VehicleDetailPage({
                 </form>
               </div>
             ))}
+            <div className="rounded-3xl border border-accent/25 bg-accent/10 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Total de gastos</p>
+                  <p className="mt-1 text-sm text-muted">Soma sem duplicar campos financeiros ja lancados no historico.</p>
+                </div>
+                <p className="text-xl font-semibold text-primary">{formatCurrency(totalCurrentCostValue)}</p>
+              </div>
+              {expensesByCategory.length > 0 ? (
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  {expensesByCategory.map((category) => (
+                    <div key={category.name} className="flex items-center justify-between rounded-2xl bg-white/75 px-3 py-2 text-sm">
+                      <span className="text-muted">{category.name}</span>
+                      <span className="font-semibold">{formatCurrency(category.total)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </CardContent>
         </Card>
       </section>

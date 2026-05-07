@@ -134,7 +134,7 @@ export function VehicleForm({ vehicle, auctionHouses }: VehicleFormProps) {
             ["administrativeFees", "Taxas administrativas"],
             ["yardCost", "Pátio"],
             ["towCost", "Guincho"],
-            ["documentationExpected", "Documentação prevista"],
+            ["documentationExpected", "Documentação"],
             ["repairsExpected", "Reparos previstos"],
             ["predictedSalePrice", "Preço de venda previsto"]
           ].map(([name, label]) => (

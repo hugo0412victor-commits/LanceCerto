@@ -1,27 +1,33 @@
-import type { Session } from "next-auth";
-import { redirect } from "next/navigation";
+const ADMIN_ROLE = "ADMIN";
+const MANAGER_ROLE = "MANAGER";
+const VIEWER_ROLE = "VIEWER";
 
-const rolePermissions: Record<string, string[]> = {
-  ADMIN: ["*"],
-  BUYER: ["dashboard", "vehicles", "simulator", "market-research", "score"],
-  FINANCE: ["dashboard", "expenses", "cashflow", "reports", "sales"],
-  OPERATIONS: ["dashboard", "vehicles", "documents", "photos", "processes"],
-  SALES: ["dashboard", "vehicles", "sales", "ads", "market-research"],
-  PARTNER: ["partner-tasks"]
-};
-
-export function hasPermission(session: Session | null, permission: string) {
-  const role = session?.user?.role;
-  if (!role) {
-    return false;
-  }
-
-  const permissions = rolePermissions[role] ?? [];
-  return permissions.includes("*") || permissions.includes(permission);
+export function canWrite(role?: string | null) {
+  return role === ADMIN_ROLE || role === MANAGER_ROLE;
 }
 
-export function requirePermission(session: Session | null, permission: string) {
-  if (!hasPermission(session, permission)) {
-    redirect("/dashboard");
+export function canDelete(role?: string | null) {
+  return role === ADMIN_ROLE;
+}
+
+export function isViewer(role?: string | null) {
+  return role === VIEWER_ROLE;
+}
+
+export function assertCanWrite(role?: string | null) {
+  if (!canWrite(role)) {
+    throw new Error("Permissao insuficiente para cadastrar ou editar dados.");
+  }
+}
+
+export function assertCanDelete(role?: string | null) {
+  if (!canDelete(role)) {
+    throw new Error("Permissao insuficiente para excluir dados.");
+  }
+}
+
+export function assertAdmin(role?: string | null) {
+  if (role !== ADMIN_ROLE) {
+    throw new Error("Permissao insuficiente para administrar configuracoes.");
   }
 }

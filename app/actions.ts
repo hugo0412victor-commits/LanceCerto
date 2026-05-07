@@ -11,6 +11,7 @@ import { generateLotRiskAnalysis } from "@/lib/ai";
 import { calculateOpportunityScore } from "@/lib/scoring";
 import { INITIAL_INSPECTION_ITEMS, getInitialInspectionSummary } from "@/lib/inspection";
 import { VEHICLE_STATUS_LABELS } from "@/lib/constants";
+import { assertAdmin, assertCanDelete, assertCanWrite } from "@/lib/permissions";
 import { parseBoolean, parseDate, parseInteger, parseNumber } from "@/lib/utils";
 
 function detectPendingVehicleFields(data: {
@@ -43,6 +44,7 @@ function normalizeMoneyValue(value?: number) {
 
 export async function saveVehicleAction(formData: FormData) {
   const session = await getServerAuthSession();
+  assertCanWrite(session?.user.role);
   const vehicleId = String(formData.get("id") ?? "").trim();
 
   const payload = {
@@ -303,6 +305,7 @@ export async function saveVehicleAction(formData: FormData) {
 
 export async function saveExpenseAction(formData: FormData) {
   const session = await getServerAuthSession();
+  assertCanWrite(session?.user.role);
   const id = String(formData.get("id") ?? "").trim();
   const vehicleId = String(formData.get("vehicleId") ?? "").trim();
 
@@ -394,6 +397,7 @@ export async function saveExpenseAction(formData: FormData) {
 
 export async function saveSupplierAction(formData: FormData) {
   const session = await getServerAuthSession();
+  assertCanWrite(session?.user.role);
   const id = String(formData.get("id") ?? "").trim();
 
   const payload = {
@@ -438,6 +442,7 @@ export async function saveSupplierAction(formData: FormData) {
 
 export async function saveSimulationAction(formData: FormData) {
   const session = await getServerAuthSession();
+  assertCanWrite(session?.user.role);
   const vehicleId = String(formData.get("vehicleId") ?? "").trim() || undefined;
   const payload = {
     vehicleId,
@@ -524,6 +529,7 @@ export async function saveSimulationAction(formData: FormData) {
 
 export async function saveMarketResearchAction(formData: FormData) {
   const session = await getServerAuthSession();
+  assertCanWrite(session?.user.role);
   const vehicleId = String(formData.get("vehicleId") ?? "").trim();
   const source = String(formData.get("source") ?? "MANUAL");
   const price = parseNumber(formData.get("price"));
@@ -577,6 +583,7 @@ export async function saveMarketResearchAction(formData: FormData) {
 
 export async function saveSaleAction(formData: FormData) {
   const session = await getServerAuthSession();
+  assertCanWrite(session?.user.role);
   const vehicleId = String(formData.get("vehicleId") ?? "").trim();
 
   const vehicle = await prisma.vehicle.findUnique({
@@ -674,6 +681,7 @@ export async function saveSaleAction(formData: FormData) {
 
 export async function updateVehicleStatusAction(formData: FormData) {
   const session = await getServerAuthSession();
+  assertCanWrite(session?.user.role);
   const vehicleId = String(formData.get("vehicleId") ?? "").trim();
   const status = String(formData.get("status") ?? VehicleStatus.ANALISE_LOTE) as VehicleStatus;
 
@@ -735,6 +743,7 @@ export async function updateVehicleStatusAction(formData: FormData) {
 
 export async function saveInitialInspectionAction(formData: FormData) {
   const session = await getServerAuthSession();
+  assertCanWrite(session?.user.role);
   const vehicleId = String(formData.get("vehicleId") ?? "").trim();
 
   if (!vehicleId) {
@@ -857,6 +866,7 @@ export async function saveInitialInspectionAction(formData: FormData) {
 
 export async function saveSettingAction(formData: FormData) {
   const session = await getServerAuthSession();
+  assertAdmin(session?.user.role);
   const id = String(formData.get("id") ?? "").trim();
   const rawValue = String(formData.get("value") ?? "").trim();
 
@@ -891,6 +901,7 @@ export async function saveSettingAction(formData: FormData) {
 
 export async function deleteExpenseAction(formData: FormData) {
   const session = await getServerAuthSession();
+  assertCanDelete(session?.user.role);
   const id = String(formData.get("id") ?? "").trim();
   const vehicleId = String(formData.get("vehicleId") ?? "").trim();
 
@@ -964,6 +975,7 @@ export async function deleteExpenseAction(formData: FormData) {
 
 export async function deleteVehicleAction(formData: FormData) {
   const session = await getServerAuthSession();
+  assertCanDelete(session?.user.role);
   const id = String(formData.get("id") ?? "").trim();
 
   if (!id) {

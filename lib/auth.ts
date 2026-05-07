@@ -69,7 +69,7 @@ export const authOptions: NextAuthOptions = {
     session({ session, token }) {
       if (session.user) {
         session.user.id = token.sub ?? "";
-        session.user.role = (token.role as string | undefined) ?? "BUYER";
+        session.user.role = (token.role as string | undefined) ?? "VIEWER";
       }
 
       return session;

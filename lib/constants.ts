@@ -21,6 +21,8 @@ import {
 
 export const USER_ROLE_LABELS: Record<UserRoleCode, string> = {
   ADMIN: "Administrador",
+  MANAGER: "Gerente",
+  VIEWER: "Visualizador",
   BUYER: "Comprador",
   FINANCE: "Financeiro",
   OPERATIONS: "Operacional",

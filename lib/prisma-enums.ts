@@ -1,5 +1,7 @@
 export const UserRoleCode = {
   ADMIN: "ADMIN",
+  MANAGER: "MANAGER",
+  VIEWER: "VIEWER",
   BUYER: "BUYER",
   FINANCE: "FINANCE",
   OPERATIONS: "OPERATIONS",

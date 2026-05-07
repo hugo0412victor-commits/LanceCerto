@@ -1,4 +1,4 @@
-import { execFile } from "child_process";
+import { execFile, execFileSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { promisify } from "util";
 import { LotImportError, type LotImportContext, type PartialVehicleImport } from "@/lib/lot-importer/types";
@@ -41,29 +41,123 @@ type LocalBrowserCandidate = {
   path: string;
 };
 
-const LOCAL_BROWSER_CANDIDATES: LocalBrowserCandidate[] = [
-  {
-    name: "edge",
-    path: "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe"
-  },
-  {
-    name: "edge",
-    path: "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe"
-  },
-  {
-    name: "chrome",
-    path: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
-  },
-  {
-    name: "chrome",
-    path: "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
-  }
-];
+const LOCAL_BROWSER_CANDIDATES: LocalBrowserCandidate[] = buildLocalBrowserCandidates();
 
 const execFileAsync = promisify(execFile);
 
 function escapePowerShellSingleQuoted(value: string) {
   return value.replace(/'/g, "''");
+}
+
+function browserNameFromPath(path: string): LocalBrowserCandidate["name"] | undefined {
+  const normalized = path.toLowerCase();
+
+  if (normalized.includes("msedge") || normalized.includes("microsoft\\edge") || normalized.includes("microsoft/edge")) {
+    return "edge";
+  }
+
+  if (normalized.includes("chrome") || normalized.includes("google\\chrome") || normalized.includes("google/chrome")) {
+    return "chrome";
+  }
+
+  return undefined;
+}
+
+function addBrowserCandidate(candidates: LocalBrowserCandidate[], path?: string | null, fallbackName?: LocalBrowserCandidate["name"]) {
+  const normalizedPath = path?.trim();
+
+  if (!normalizedPath) {
+    return;
+  }
+
+  const name = browserNameFromPath(normalizedPath) ?? fallbackName;
+
+  if (!name || candidates.some((candidate) => candidate.path.toLowerCase() === normalizedPath.toLowerCase())) {
+    return;
+  }
+
+  candidates.push({
+    name,
+    path: normalizedPath
+  });
+}
+
+function addBrowserCandidatesFromDirectory(candidates: LocalBrowserCandidate[], basePath?: string, browserName?: LocalBrowserCandidate["name"]) {
+  if (!basePath) {
+    return;
+  }
+
+  if (!browserName || browserName === "edge") {
+    addBrowserCandidate(candidates, `${basePath}\\Microsoft\\Edge\\Application\\msedge.exe`, "edge");
+  }
+
+  if (!browserName || browserName === "chrome") {
+    addBrowserCandidate(candidates, `${basePath}\\Google\\Chrome\\Application\\chrome.exe`, "chrome");
+  }
+}
+
+function findBrowserCommandsOnPath() {
+  const commands =
+    process.platform === "win32"
+      ? [
+          { command: "msedge.exe", name: "edge" as const },
+          { command: "chrome.exe", name: "chrome" as const }
+        ]
+      : [
+          { command: "microsoft-edge", name: "edge" as const },
+          { command: "microsoft-edge-stable", name: "edge" as const },
+          { command: "google-chrome", name: "chrome" as const },
+          { command: "google-chrome-stable", name: "chrome" as const },
+          { command: "chromium", name: "chrome" as const },
+          { command: "chromium-browser", name: "chrome" as const }
+        ];
+
+  return commands.flatMap(({ command, name }) => {
+    try {
+      const executable = process.platform === "win32" ? "where.exe" : "which";
+      const stdout = execFileSync(executable, [command], {
+        encoding: "utf-8",
+        windowsHide: true,
+        stdio: ["ignore", "pipe", "ignore"]
+      });
+
+      return stdout
+        .split(/\r?\n/)
+        .map((path) => path.trim())
+        .filter(Boolean)
+        .map((path) => ({ name, path }));
+    } catch {
+      return [];
+    }
+  });
+}
+
+function buildLocalBrowserCandidates() {
+  const candidates: LocalBrowserCandidate[] = [];
+
+  addBrowserCandidate(candidates, process.env.LOT_IMPORT_BROWSER_PATH);
+  addBrowserCandidate(candidates, process.env.BROWSER_PATH);
+  addBrowserCandidate(candidates, process.env.EDGE_PATH, "edge");
+  addBrowserCandidate(candidates, process.env.CHROME_PATH, "chrome");
+
+  addBrowserCandidatesFromDirectory(candidates, process.env["ProgramFiles(x86)"]);
+  addBrowserCandidatesFromDirectory(candidates, process.env.ProgramFiles);
+  addBrowserCandidatesFromDirectory(candidates, process.env.LOCALAPPDATA);
+
+  addBrowserCandidate(candidates, "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge", "edge");
+  addBrowserCandidate(candidates, "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "chrome");
+  addBrowserCandidate(candidates, "/usr/bin/microsoft-edge", "edge");
+  addBrowserCandidate(candidates, "/usr/bin/microsoft-edge-stable", "edge");
+  addBrowserCandidate(candidates, "/usr/bin/google-chrome", "chrome");
+  addBrowserCandidate(candidates, "/usr/bin/google-chrome-stable", "chrome");
+  addBrowserCandidate(candidates, "/usr/bin/chromium", "chrome");
+  addBrowserCandidate(candidates, "/usr/bin/chromium-browser", "chrome");
+
+  for (const candidate of findBrowserCommandsOnPath()) {
+    addBrowserCandidate(candidates, candidate.path, candidate.name);
+  }
+
+  return candidates;
 }
 
 function readCachedLotHtml(url: string) {

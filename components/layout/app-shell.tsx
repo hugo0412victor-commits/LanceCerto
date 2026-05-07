@@ -8,6 +8,7 @@ import { LanceCertoLogo } from "@/components/brand/lancecerto-logo";
 import { USER_ROLE_LABELS } from "@/lib/constants";
 import { LogoutButton } from "@/components/layout/logout-button";
 import { getBrandingSettings } from "@/lib/system-settings";
+import { canWrite } from "@/lib/permissions";
 
 async function UserHeader({ session }: { session: Session | null }) {
   return (
@@ -20,14 +21,14 @@ async function UserHeader({ session }: { session: Session | null }) {
         <Bell className="h-4 w-4" />
       </button>
       <Badge tone="info" className="hidden md:inline-flex">
-        {USER_ROLE_LABELS[(session?.user.role as keyof typeof USER_ROLE_LABELS) ?? "BUYER"]}
+        {USER_ROLE_LABELS[(session?.user.role as keyof typeof USER_ROLE_LABELS) ?? "VIEWER"]}
       </Badge>
       <div className="flex items-center gap-3 rounded-2xl border border-border bg-white px-4 py-2.5 shadow-sm">
         <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/8 text-primary">
           <UserCircle2 className="h-5 w-5" />
         </div>
         <div className="text-left">
-          <p className="whitespace-nowrap text-sm font-semibold text-foreground">{session?.user.name ?? "Admin Demo"}</p>
+          <p className="whitespace-nowrap text-sm font-semibold text-foreground">{session?.user.name ?? "Usuario"}</p>
         </div>
       </div>
       <div className="shrink-0">
@@ -44,6 +45,7 @@ export async function AppShell({
 }) {
   const session = await getServerAuthSession();
   const { systemName } = await getBrandingSettings();
+  const userCanWrite = canWrite(session?.user.role);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -85,12 +87,14 @@ export async function AppShell({
                   <Search className="mr-2 h-4 w-4 shrink-0" />
                   <span className="truncate">Buscar lote, placa, modelo, cliente ou fornecedor</span>
                 </div>
-                <Link href="/vehicles/new" className="w-full">
-                  <span className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-accent px-4 text-sm font-semibold text-white shadow-glow transition hover:bg-[#C88914]">
-                    <Plus className="h-4 w-4" />
-                    Novo lote
-                  </span>
-                </Link>
+                {userCanWrite ? (
+                  <Link href="/vehicles/new" className="w-full">
+                    <span className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-accent px-4 text-sm font-semibold text-white shadow-glow transition hover:bg-[#C88914]">
+                      <Plus className="h-4 w-4" />
+                      Novo lote
+                    </span>
+                  </Link>
+                ) : null}
               </div>
             </div>
           </div>

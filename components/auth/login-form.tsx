@@ -56,7 +56,7 @@ export function LoginForm() {
       ) : null}
       <div className="space-y-2">
         <label className="text-sm font-medium text-foreground">E-mail</label>
-        <Input name="email" type="email" placeholder="admin@lancecerto.demo" required={!localAuthBypassEnabled} />
+        <Input name="email" type="email" placeholder="seu@email.com" required={!localAuthBypassEnabled} />
       </div>
       <div className="space-y-2">
         <label className="text-sm font-medium text-foreground">Senha</label>
@@ -66,9 +66,6 @@ export function LoginForm() {
       <Button type="submit" className="w-full" variant="primary" disabled={loading}>
         {loading ? "Entrando..." : "Entrar"}
       </Button>
-      <div className="rounded-[1.4rem] border border-border bg-background p-4 text-sm text-slate-600">
-        Login demo sugerido: <strong>admin@autoarremate.demo</strong> / <strong>Admin123!</strong>
-      </div>
     </form>
   );
 }

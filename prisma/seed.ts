@@ -10,6 +10,41 @@ const prisma = new PrismaClient();
 
 const toSeedNumber = (value: number | { toString(): string } | null | undefined) => Number(value ?? 0);
 
+const REQUIRED_AUTH_ROLES = [UserRoleCode.ADMIN] as const;
+
+const ROLE_PERMISSIONS: Record<(typeof REQUIRED_AUTH_ROLES)[number], Record<string, boolean>> = {
+  [UserRoleCode.ADMIN]: {
+    read: true,
+    create: true,
+    update: true,
+    delete: true,
+    manageSettings: true
+  }
+};
+
+const INITIAL_USERS = [
+  {
+    name: "Victor",
+    email: "victor@gestaolancecerto.com",
+    password: "victor@123!",
+    role: UserRoleCode.ADMIN
+  },
+  {
+    name: "Andre",
+    email: "andre@gestaolancecerto.com",
+    password: "andre@123!",
+    role: UserRoleCode.ADMIN
+  },
+  {
+    name: "Kelvin",
+    email: "kelvin@gestaolancecerto.com",
+    password: "kelvin@123!",
+    role: UserRoleCode.ADMIN
+  }
+] as const;
+
+const LEGACY_USER_EMAILS = ["admin@lancecerto.com.br", "gestor@lancecerto.com.br", "consulta@lancecerto.com.br"] as const;
+
 async function resetDatabase() {
   await prisma.aiAnalysis.deleteMany();
   await prisma.opportunityScore.deleteMany();
@@ -208,6 +243,69 @@ async function seedBaseData() {
         label: setting.label,
         value: setting.value as never,
         description: setting.description
+      }
+    });
+  }
+}
+
+async function seedAuthUsers() {
+  const roleMap = new Map<UserRoleCode, string>();
+
+  for (const roleCode of REQUIRED_AUTH_ROLES) {
+    const role = await prisma.role.upsert({
+      where: {
+        code: roleCode
+      },
+      update: {
+        name: USER_ROLE_LABELS[roleCode],
+        description: `Perfil ${USER_ROLE_LABELS[roleCode]}`,
+        permissions: ROLE_PERMISSIONS[roleCode] as never
+      },
+      create: {
+        code: roleCode,
+        name: USER_ROLE_LABELS[roleCode],
+        description: `Perfil ${USER_ROLE_LABELS[roleCode]}`,
+        permissions: ROLE_PERMISSIONS[roleCode] as never
+      }
+    });
+
+    roleMap.set(roleCode, role.id);
+  }
+
+  await prisma.user.updateMany({
+    where: {
+      email: {
+        in: [...LEGACY_USER_EMAILS]
+      }
+    },
+    data: {
+      active: false
+    }
+  });
+
+  for (const user of INITIAL_USERS) {
+    const roleId = roleMap.get(user.role);
+
+    if (!roleId) {
+      throw new Error(`Role ${user.role} nao encontrada para criar usuario ${user.email}.`);
+    }
+
+    await prisma.user.upsert({
+      where: {
+        email: user.email
+      },
+      update: {
+        name: user.name,
+        passwordHash: hashPassword(user.password),
+        roleId,
+        active: true
+      },
+      create: {
+        name: user.name,
+        email: user.email,
+        passwordHash: hashPassword(user.password),
+        roleId,
+        active: true
       }
     });
   }
@@ -899,9 +997,7 @@ async function seedVehicles() {
 }
 
 async function main() {
-  await resetDatabase();
-  await seedBaseData();
-  await seedVehicles();
+  await seedAuthUsers();
 }
 
 main()

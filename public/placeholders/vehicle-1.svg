@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" fill="none">
+  <rect width="1600" height="900" fill="#F3E9D6"/>
+  <circle cx="1290" cy="170" r="200" fill="#0F766E" fill-opacity="0.12"/>
+  <rect x="120" y="520" width="1240" height="110" rx="55" fill="#0F172A"/>
+  <path d="M380 500L510 340C550 292 604 265 663 265H1014C1064 265 1111 286 1145 323L1260 450V520H380V500Z" fill="#D97706"/>
+  <circle cx="520" cy="640" r="92" fill="#1F2937"/>
+  <circle cx="1120" cy="640" r="92" fill="#1F2937"/>
+  <circle cx="520" cy="640" r="44" fill="#CBD5E1"/>
+  <circle cx="1120" cy="640" r="44" fill="#CBD5E1"/>
+  <rect x="610" y="315" width="280" height="120" rx="24" fill="#F8FAFC" fill-opacity="0.82"/>
+  <rect x="910" y="315" width="160" height="120" rx="24" fill="#F8FAFC" fill-opacity="0.82"/>
+  <text x="120" y="160" fill="#0F172A" font-family="Arial, sans-serif" font-size="68" font-weight="700">Ford Ka SE 2020</text>
+  <text x="120" y="228" fill="#475569" font-family="Arial, sans-serif" font-size="28">Placeholder interno para ambiente demo</text>
+</svg>

@@ -1,0 +1,9 @@
+.next
+node_modules
+.env
+.env.local
+coverage
+dist
+public/uploads
+storage/uploads
+prisma/dev.db

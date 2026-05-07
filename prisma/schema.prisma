@@ -1,0 +1,717 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+enum UserRoleCode {
+  ADMIN
+  BUYER
+  FINANCE
+  OPERATIONS
+  SALES
+  PARTNER
+}
+
+enum VehicleStatus {
+  ANALISE_LOTE
+  ARREMATADO
+  AGUARDANDO_PAGAMENTO
+  PAGO
+  AGUARDANDO_RETIRADA
+  RETIRADO
+  VISTORIA_INICIAL
+  ORCAMENTO_REPAROS
+  MECANICA
+  FUNILARIA
+  PINTURA
+  ESTETICA
+  DOCUMENTACAO
+  PRECIFICACAO
+  FOTOS_ANUNCIO
+  ANUNCIADO
+  EM_NEGOCIACAO
+  VENDIDO
+  TRANSFERIDO
+  FINALIZADO
+  CANCELADO
+}
+
+enum ImportStatus {
+  PENDING
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+enum DocumentCategory {
+  NOTA_VENDA_LEILAO
+  COMPROVANTE_PAGAMENTO
+  GATEPASS
+  BOLETO
+  CRLV
+  ATPV_E
+  LAUDO_CAUTELAR
+  VISTORIA
+  ORCAMENTO
+  NF_PECA
+  NF_SERVICO
+  RECIBO
+  CONTRATO_VENDA
+  COMPROVANTE_TRANSFERENCIA
+  DOCUMENTO_PESSOAL
+  OUTROS
+}
+
+enum PhotoCategory {
+  ORIGINAIS_LEILAO
+  RETIRADA
+  ANTES_REPARO
+  DURANTE_REPARO
+  APOS_REPARO
+  ANUNCIO
+  OUTRAS
+}
+
+enum ExpenseCategoryType {
+  ARREMATE
+  COMISSAO_LEILAO
+  TAXA_ADMINISTRATIVA
+  PATIO
+  GUINCHO
+  DOCUMENTACAO
+  DESPACHANTE
+  IPVA
+  MULTAS
+  MECANICA
+  FUNILARIA
+  PINTURA
+  ESTETICA
+  HIGIENIZACAO
+  PECAS
+  ANUNCIOS
+  COMISSAO_VENDA
+  IMPOSTOS
+  TAXAS_BANCARIAS
+  JUROS
+  OUTROS
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+  CANCELLED
+}
+
+enum PaymentMethod {
+  PIX
+  TRANSFER
+  CARD
+  CASH
+  BOLETO
+  OTHER
+}
+
+enum StepExecutionStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  BLOCKED
+  DONE
+}
+
+enum MarketSourceType {
+  FIPE
+  WEBMOTORS
+  MOBIAUTO
+  OLX
+  MANUAL
+  OTHER
+}
+
+enum SellerType {
+  LOJISTA
+  PARTICULAR
+  LEILOEIRA
+  OUTRO
+}
+
+enum AdPortal {
+  OLX
+  WEBMOTORS
+  MOBIAUTO
+  INSTAGRAM
+  FACEBOOK_MARKETPLACE
+  OTHER
+}
+
+enum AdStatus {
+  DRAFT
+  PUBLISHED
+  PAUSED
+  SOLD
+  ARCHIVED
+}
+
+enum LeadSource {
+  WHATSAPP
+  INSTAGRAM
+  OLX
+  WEBMOTORS
+  MOBIAUTO
+  INDICACAO
+  MANUAL
+  OTHER
+}
+
+enum LeadStage {
+  NOVO
+  CONTATO
+  NEGOCIANDO
+  PROPOSTA
+  CONCLUIDO
+  PERDIDO
+}
+
+enum CashFlowType {
+  IN
+  OUT
+}
+
+enum CashFlowStatus {
+  PROJECTED
+  REALIZED
+  CANCELLED
+}
+
+enum LiquidityLevel {
+  HIGH
+  MEDIUM
+  LOW
+  UNKNOWN
+}
+
+enum AiAnalysisType {
+  LOT_RISK
+  SALE_COPY
+  WHATSAPP_MESSAGE
+}
+
+enum AiRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Role {
+  id          String       @id @default(cuid())
+  code        UserRoleCode @unique
+  name        String
+  description String?
+  permissions Json?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  users       User[]
+}
+
+model User {
+  id                String           @id @default(cuid())
+  name              String
+  email             String           @unique
+  passwordHash      String
+  phone             String?
+  active            Boolean          @default(true)
+  avatarUrl         String?
+  roleId            String
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  role              Role             @relation(fields: [roleId], references: [id])
+  createdVehicles   Vehicle[]        @relation("VehicleCreatedBy")
+  uploadedDocuments VehicleDocument[] @relation("DocumentUploadedBy")
+  uploadedPhotos    VehiclePhoto[]   @relation("PhotoUploadedBy")
+  assignedProcesses VehicleProcess[] @relation("ProcessAssignedTo")
+  auditLogs         AuditLog[]
+}
+
+model AuctionHouse {
+  id          String        @id @default(cuid())
+  name        String        @unique
+  slug        String        @unique
+  website     String?
+  importerKey String?
+  config      Json?
+  active      Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  vehicles    Vehicle[]
+  snapshots   LotSnapshot[]
+}
+
+model Vehicle {
+  id                     String             @id @default(cuid())
+  stockCode              String?            @unique
+  title                  String?
+  lotUrl                 String?
+  lotCode                String?
+  auctionHouseId         String?
+  createdById            String?
+  status                 VehicleStatus      @default(ANALISE_LOTE)
+  brand                  String?
+  model                  String?
+  version                String?
+  manufacturingYear      Int?
+  modelYear              Int?
+  plate                  String?
+  plateFinal             String?
+  chassis                String?
+  chassisType            String?
+  color                  String?
+  fuel                   String?
+  transmission           String?
+  mileage                Int?
+  documentType           String?
+  mountType              String?
+  condition              String?
+  hasKey                 Boolean?
+  runningCondition       Boolean?
+  yard                   String?
+  city                   String?
+  state                  String?
+  auctionDate            DateTime?
+  bidDate                DateTime?
+  fipeValue              Decimal?           @db.Decimal(14, 2)
+  marketEstimatedValue   Decimal?           @db.Decimal(14, 2)
+  bidValue               Decimal?           @db.Decimal(14, 2)
+  auctionCommission      Decimal?           @db.Decimal(14, 2)
+  administrativeFees     Decimal?           @db.Decimal(14, 2)
+  yardCost               Decimal?           @db.Decimal(14, 2)
+  towCost                Decimal?           @db.Decimal(14, 2)
+  documentationExpected  Decimal?           @db.Decimal(14, 2)
+  repairsExpected        Decimal?           @db.Decimal(14, 2)
+  totalPredictedCost     Decimal?           @db.Decimal(14, 2)
+  totalActualCost        Decimal?           @db.Decimal(14, 2)
+  predictedSalePrice     Decimal?           @db.Decimal(14, 2)
+  actualSalePrice        Decimal?           @db.Decimal(14, 2)
+  predictedProfit        Decimal?           @db.Decimal(14, 2)
+  actualProfit           Decimal?           @db.Decimal(14, 2)
+  predictedMargin        Decimal?           @db.Decimal(7, 2)
+  actualMargin           Decimal?           @db.Decimal(7, 2)
+  predictedRoi           Decimal?           @db.Decimal(7, 2)
+  actualRoi              Decimal?           @db.Decimal(7, 2)
+  minimumAcceptablePrice Decimal?           @db.Decimal(14, 2)
+  maxRecommendedBid      Decimal?           @db.Decimal(14, 2)
+  snapshotConfirmed      Boolean            @default(false)
+  snapshotDate           DateTime?
+  completenessPercent    Int                @default(0)
+  pendingFields          String[]           @default([])
+  alerts                 String[]           @default([])
+  notes                  String?
+  rawMetadata            Json?
+  mainPhotoUrl           String?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  auctionHouse           AuctionHouse?      @relation(fields: [auctionHouseId], references: [id])
+  createdBy              User?              @relation("VehicleCreatedBy", fields: [createdById], references: [id])
+  lotSnapshots           LotSnapshot[]
+  photos                 VehiclePhoto[]
+  documents              VehicleDocument[]
+  expenses               Expense[]
+  processes              VehicleProcess[]
+  simulations            Simulation[]
+  marketResearches       MarketResearch[]
+  sale                   Sale?
+  advertisements         Advertisement[]
+  leads                  Lead[]
+  cashFlows              CashFlow[]
+  opportunityScore       OpportunityScore?
+  aiAnalyses             AiAnalysis[]
+}
+
+model LotSnapshot {
+  id                String        @id @default(cuid())
+  vehicleId         String
+  auctionHouseId    String?
+  sourceUrl         String
+  capturedAt        DateTime      @default(now())
+  auctionHouseName  String?
+  lotCode           String?
+  brand             String?
+  model             String?
+  version           String?
+  manufacturingYear Int?
+  modelYear         Int?
+  informedFipe      Decimal?      @db.Decimal(14, 2)
+  documentType      String?
+  mountType         String?
+  condition         String?
+  hasKey            Boolean?
+  runningCondition  Boolean?
+  fuel              String?
+  transmission      String?
+  color             String?
+  mileage           Int?
+  chassis           String?
+  plateOrFinal      String?
+  yard              String?
+  city              String?
+  state             String?
+  auctionDate       DateTime?
+  originalNotes     String?
+  photoUrls         String[]      @default([])
+  rawJson           Json?
+  importStatus      ImportStatus  @default(PENDING)
+  alerts            String[]      @default([])
+  pendingFields     String[]      @default([])
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  vehicle           Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  auctionHouse      AuctionHouse? @relation(fields: [auctionHouseId], references: [id])
+}
+
+model VehiclePhoto {
+  id           String        @id @default(cuid())
+  vehicleId    String
+  uploadedById String?
+  category     PhotoCategory
+  caption      String?
+  storagePath  String
+  publicUrl    String
+  sortOrder    Int           @default(0)
+  isPrimary    Boolean       @default(false)
+  sourceUrl    String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  vehicle      Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  uploadedBy   User?         @relation("PhotoUploadedBy", fields: [uploadedById], references: [id])
+}
+
+model VehicleDocument {
+  id             String           @id @default(cuid())
+  vehicleId      String
+  uploadedById   String?
+  category       DocumentCategory
+  fileName       String
+  mimeType       String
+  fileSize       Int
+  storagePath    String
+  publicUrl      String
+  note           String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  vehicle        Vehicle          @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  uploadedBy     User?            @relation("DocumentUploadedBy", fields: [uploadedById], references: [id])
+}
+
+model ExpenseCategory {
+  id          String              @id @default(cuid())
+  code        ExpenseCategoryType @unique
+  name        String
+  description String?
+  color       String?
+  active      Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  expenses    Expense[]
+}
+
+model Expense {
+  id               String          @id @default(cuid())
+  vehicleId        String
+  categoryId       String
+  supplierId       String?
+  description      String
+  date             DateTime?
+  predictedAmount  Decimal?        @db.Decimal(14, 2)
+  actualAmount     Decimal?        @db.Decimal(14, 2)
+  paymentStatus    PaymentStatus   @default(PENDING)
+  paymentMethod    PaymentMethod?
+  dueDate          DateTime?
+  proofPath        String?
+  note             String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  vehicle          Vehicle         @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  category         ExpenseCategory @relation(fields: [categoryId], references: [id])
+  supplier         Supplier?       @relation(fields: [supplierId], references: [id])
+  linkedProcesses  VehicleProcess[]
+}
+
+model ProcessStep {
+  id              String           @id @default(cuid())
+  name            String
+  slug            String           @unique
+  order           Int
+  color           String?
+  defaultRoleCode UserRoleCode?
+  active          Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  vehicleSteps    VehicleProcess[]
+}
+
+model VehicleProcess {
+  id             String              @id @default(cuid())
+  vehicleId      String
+  processStepId  String
+  assignedToId   String?
+  linkedExpenseId String?
+  status         StepExecutionStatus @default(NOT_STARTED)
+  dueDate        DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  notes          String?
+  attachments    Json?
+  delayAlert     Boolean             @default(false)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  vehicle        Vehicle             @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  processStep    ProcessStep         @relation(fields: [processStepId], references: [id])
+  assignedTo     User?               @relation("ProcessAssignedTo", fields: [assignedToId], references: [id])
+  linkedExpense  Expense?            @relation(fields: [linkedExpenseId], references: [id])
+
+  @@unique([vehicleId, processStepId])
+}
+
+model Simulation {
+  id                     String    @id @default(cuid())
+  vehicleId              String?
+  brand                  String?
+  model                  String?
+  version                String?
+  year                   Int?
+  fipeValue              Decimal?  @db.Decimal(14, 2)
+  marketAverageValue     Decimal?  @db.Decimal(14, 2)
+  intendedBid            Decimal?  @db.Decimal(14, 2)
+  auctionCommission      Decimal?  @db.Decimal(14, 2)
+  administrativeFees     Decimal?  @db.Decimal(14, 2)
+  yardCost               Decimal?  @db.Decimal(14, 2)
+  towCost                Decimal?  @db.Decimal(14, 2)
+  documentationCost      Decimal?  @db.Decimal(14, 2)
+  estimatedRepairs       Decimal?  @db.Decimal(14, 2)
+  desiredMargin          Decimal?  @db.Decimal(7, 2)
+  predictedSalePrice     Decimal?  @db.Decimal(14, 2)
+  desiredDiscountOnFipe  Decimal?  @db.Decimal(7, 2)
+  estimatedSellingDays   Int?
+  totalPredictedCost     Decimal?  @db.Decimal(14, 2)
+  predictedProfit        Decimal?  @db.Decimal(14, 2)
+  predictedMargin        Decimal?  @db.Decimal(7, 2)
+  predictedRoi           Decimal?  @db.Decimal(7, 2)
+  minimumSellingPrice    Decimal?  @db.Decimal(14, 2)
+  idealSellingPrice      Decimal?  @db.Decimal(14, 2)
+  aggressiveSellingPrice Decimal?  @db.Decimal(14, 2)
+  recommendedMaxBid      Decimal?  @db.Decimal(14, 2)
+  recommendation         String?
+  notes                  String?
+  savedAsVehicle         Boolean   @default(false)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  vehicle                Vehicle?  @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+}
+
+model MarketSource {
+  id         String           @id @default(cuid())
+  code       MarketSourceType @unique
+  name       String
+  website    String?
+  notes      String?
+  active     Boolean          @default(true)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  listings   MarketListing[]
+}
+
+model MarketResearch {
+  id                        String          @id @default(cuid())
+  vehicleId                 String
+  researchedAt              DateTime        @default(now())
+  fipeValue                 Decimal?        @db.Decimal(14, 2)
+  marketAverage             Decimal?        @db.Decimal(14, 2)
+  lowestPrice               Decimal?        @db.Decimal(14, 2)
+  highestPrice              Decimal?        @db.Decimal(14, 2)
+  listingsCount             Int             @default(0)
+  suggestedCompetitivePrice Decimal?        @db.Decimal(14, 2)
+  suggestedAggressivePrice  Decimal?        @db.Decimal(14, 2)
+  suggestedIdealPrice       Decimal?        @db.Decimal(14, 2)
+  minimumAcceptablePrice    Decimal?        @db.Decimal(14, 2)
+  liquidityLevel            LiquidityLevel  @default(UNKNOWN)
+  notes                     String?
+  sourceStatus              Json?
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
+  vehicle                   Vehicle         @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  listings                  MarketListing[]
+}
+
+model MarketListing {
+  id               String           @id @default(cuid())
+  marketResearchId String
+  marketSourceId   String?
+  source           MarketSourceType
+  listingUrl       String?
+  price            Decimal?         @db.Decimal(14, 2)
+  year             Int?
+  version          String?
+  mileage          Int?
+  city             String?
+  state            String?
+  sellerType       SellerType?
+  notes            String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  marketResearch   MarketResearch   @relation(fields: [marketResearchId], references: [id], onDelete: Cascade)
+  marketSource     MarketSource?    @relation(fields: [marketSourceId], references: [id])
+}
+
+model Sale {
+  id                   String         @id @default(cuid())
+  vehicleId            String         @unique
+  soldAt               DateTime?
+  listedPrice          Decimal?       @db.Decimal(14, 2)
+  soldPrice            Decimal?       @db.Decimal(14, 2)
+  discountGranted      Decimal?       @db.Decimal(14, 2)
+  buyerName            String?
+  saleChannel          String?
+  salesCommission      Decimal?       @db.Decimal(14, 2)
+  taxes                Decimal?       @db.Decimal(14, 2)
+  paymentMethod        PaymentMethod?
+  notes                String?
+  transferDate         DateTime?
+  transferStatus       String?
+  documents            Json?
+  grossProfit          Decimal?       @db.Decimal(14, 2)
+  netProfit            Decimal?       @db.Decimal(14, 2)
+  netMargin            Decimal?       @db.Decimal(7, 2)
+  roi                  Decimal?       @db.Decimal(7, 2)
+  daysToSale           Int?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  vehicle              Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+}
+
+model Supplier {
+  id            String     @id @default(cuid())
+  name          String
+  phone         String?
+  email         String?
+  document      String?
+  address       String?
+  category      String
+  notes         String?
+  rating        Int?
+  averageLeadTime Int?
+  averageCost   Decimal?   @db.Decimal(14, 2)
+  serviceCount  Int        @default(0)
+  totalPaid     Decimal?   @db.Decimal(14, 2)
+  active        Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  expenses      Expense[]
+}
+
+model Advertisement {
+  id            String    @id @default(cuid())
+  vehicleId     String
+  portal        AdPortal
+  listingUrl    String?
+  publishedAt   DateTime?
+  listedPrice   Decimal?  @db.Decimal(14, 2)
+  status        AdStatus  @default(DRAFT)
+  receivedLeads Int       @default(0)
+  notes         String?
+  adCost        Decimal?  @db.Decimal(14, 2)
+  boostCost     Decimal?  @db.Decimal(14, 2)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  vehicle       Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  leads         Lead[]
+}
+
+model Lead {
+  id               String     @id @default(cuid())
+  vehicleId        String?
+  advertisementId  String?
+  customerName     String?
+  phone            String?
+  email            String?
+  source           LeadSource @default(MANUAL)
+  stage            LeadStage  @default(NOVO)
+  notes            String?
+  conversationLog  Json?
+  lastContactAt    DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  vehicle          Vehicle?   @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  advertisement    Advertisement? @relation(fields: [advertisementId], references: [id], onDelete: SetNull)
+}
+
+model CashFlow {
+  id            String         @id @default(cuid())
+  vehicleId     String?
+  type          CashFlowType
+  status        CashFlowStatus @default(PROJECTED)
+  description   String
+  amount        Decimal        @db.Decimal(14, 2)
+  occurredAt    DateTime?
+  expectedAt    DateTime?
+  paymentMethod PaymentMethod?
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  vehicle       Vehicle?       @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  entityType String
+  entityId   String
+  action     String
+  beforeData Json?
+  afterData  Json?
+  message    String?
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model Setting {
+  id          String   @id @default(cuid())
+  group       String
+  key         String   @unique
+  label       String
+  value       Json
+  description String?
+  editable    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model OpportunityScore {
+  id             String    @id @default(cuid())
+  vehicleId      String    @unique
+  score          Int
+  classification String
+  breakdown      Json
+  weights        Json
+  manualOverride Boolean   @default(false)
+  notes          String?
+  generatedAt    DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  vehicle        Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+}
+
+model AiAnalysis {
+  id           String         @id @default(cuid())
+  vehicleId    String
+  analysisType AiAnalysisType
+  input        Json
+  output       Json
+  summary      String?
+  riskLevel    AiRiskLevel?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  vehicle      Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+}

@@ -18,6 +18,172 @@ import {
 } from "@/lib/lot-importer/utils";
 import { LotImportError } from "@/lib/lot-importer/types";
 
+type CopartLotDetails = Record<string, unknown>;
+
+const COPART_API_HEADERS = {
+  "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+  accept: "application/json,text/plain,*/*",
+  "accept-language": "pt-BR,pt;q=0.9,en;q=0.8"
+};
+
+function asString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function asNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value.replace(/[^\d.,-]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", "."));
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  return undefined;
+}
+
+function asText(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+
+  return asString(value);
+}
+
+function parseCopartBoolean(value: unknown) {
+  const normalized = asString(value)?.toLowerCase();
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (["y", "yes", "s", "sim", "true"].includes(normalized)) {
+    return true;
+  }
+
+  if (["n", "no", "nao", "não", "false"].includes(normalized)) {
+    return false;
+  }
+
+  return undefined;
+}
+
+function parseCopartYard(value?: string) {
+  const match = value?.match(/^(.*?)\s*-\s*([A-Z]{2})$/i);
+
+  return {
+    city: match?.[1]?.trim(),
+    state: match?.[2]?.toUpperCase()
+  };
+}
+
+function parseCopartAuctionDate(value: unknown) {
+  const timestamp = asNumber(value);
+
+  if (!timestamp) {
+    return undefined;
+  }
+
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+function buildCopartPhotoUrls(details: CopartLotDetails) {
+  const thumbnail = asString(details.tims);
+
+  if (!thumbnail) {
+    return [];
+  }
+
+  return [thumbnail, thumbnail.replace(/imageType=thumbnail/i, "imageType=fullscreen")].filter((item, index, array) => array.indexOf(item) === index);
+}
+
+async function fetchCopartLotDetails(url: string) {
+  const parsed = new URL(url);
+  const lotCode = parsed.pathname.match(/\/lot\/([a-z0-9-]+)/i)?.[1];
+
+  if (!lotCode) {
+    throw new LotImportError("Nao foi possivel identificar o numero do lote na URL da Copart.", "INVALID_URL", 400, {
+      url
+    });
+  }
+
+  const apiUrl = new URL(`/public/data/lotdetails/solr/${lotCode}`, `${parsed.protocol}//${parsed.hostname}`);
+  const response = await fetch(apiUrl, {
+    headers: COPART_API_HEADERS,
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    throw new LotImportError("A API da Copart respondeu com erro para este lote.", "IMPORT_FAILED", 502, {
+      url: parsed.toString(),
+      apiUrl: apiUrl.toString(),
+      statusCode: response.status
+    });
+  }
+
+  const payload = (await response.json()) as {
+    returnCode?: number;
+    returnCodeDesc?: string;
+    data?: {
+      lotDetails?: CopartLotDetails;
+    };
+  };
+  const details = payload.data?.lotDetails;
+
+  if (payload.returnCode !== 1 || !details) {
+    throw new LotImportError("A Copart nao retornou dados estruturados para este lote.", "DATA_NOT_FOUND", 422, {
+      url: parsed.toString(),
+      apiUrl: apiUrl.toString(),
+      returnCode: payload.returnCode,
+      returnCodeDesc: payload.returnCodeDesc
+    });
+  }
+
+  return {
+    apiUrl: apiUrl.toString(),
+    lotCode,
+    details
+  };
+}
+
+function buildVehicleDataFromCopartApi(url: string, lotCode: string, details: CopartLotDetails) {
+  const yard = asString(details.yn) ?? asString(details.pyn);
+  const yardLocation = parseCopartYard(yard);
+  const runningConditionText = asString(details.drvr);
+  const manufacturingYear = Math.trunc(asNumber(details.my) ?? 0) || undefined;
+  const modelYear = Math.trunc(asNumber(details.lcy) ?? 0) || undefined;
+
+  return {
+    lotUrl: url,
+    lotCode: asText(details.ln) ?? lotCode,
+    auctionHouseName: "Copart Brasil",
+    brand: asString(details.mkn),
+    model: asString(details.lm),
+    version: asString(details.version),
+    manufacturingYear,
+    modelYear,
+    fipeValue: asNumber(details.la),
+    documentType: asString(details.stt),
+    mountType: asString(details.dtd),
+    condition: asString(details.lt) ?? asString(details.damageDesc),
+    hasKey: parseCopartBoolean(details.hk),
+    runningCondition: runningConditionText ? !/(nao|não|desconhecido|inoperante|nao funciona|não funciona)/i.test(runningConditionText) : undefined,
+    runningConditionText,
+    fuel: asString(details.ft),
+    mileage: asNumber(details.orr),
+    chassis: asString(details.fv),
+    yard,
+    city: yardLocation.city,
+    state: yardLocation.state,
+    auctionDate: parseCopartAuctionDate(details.ad),
+    auctionDateText: asString(details.auctionDateStr),
+    originalNotes: asString(details.cmmnts),
+    originalPhotoUrls: buildCopartPhotoUrls(details)
+  };
+}
+
 export class CopartLotProvider {
   async import(url: string): Promise<LotImportResult> {
     let sourceMethod = "direct_fetch";
@@ -25,6 +191,48 @@ export class CopartLotProvider {
     let browserFallbackUsed = false;
     let context;
     let html;
+
+    try {
+      const apiResult = await fetchCopartLotDetails(url);
+      const vehicleData = buildVehicleDataFromCopartApi(url, apiResult.lotCode, apiResult.details);
+      ensureImportedData(vehicleData, {
+        requestedUrl: url,
+        finalUrl: url,
+        hostname: new URL(url).hostname,
+        statusCode: 200
+      });
+
+      const pendingFields = computePendingFields(vehicleData);
+
+      return {
+        status: pendingFields.length <= 2 ? "SUCCESS" : "PARTIAL",
+        provider: "copart",
+        vehicleData,
+        rawJson: {
+          requestedUrl: url,
+          finalUrl: url,
+          statusCode: 200,
+          sourceMethod: "copart_lotdetails_api",
+          apiUrl: apiResult.apiUrl,
+          lotDetails: apiResult.details
+        },
+        alerts:
+          pendingFields.length <= 2
+            ? ["Lote da Copart importado pela API estruturada e salvo internamente com os dados principais."]
+            : ["Lote da Copart importado parcialmente pela API estruturada.", "Confira os campos pendentes antes de aprovar o lote."],
+        pendingFields,
+        context: {
+          requestedUrl: url,
+          finalUrl: url,
+          hostname: new URL(url).hostname,
+          statusCode: 200
+        }
+      };
+    } catch (apiError) {
+      if (apiError instanceof LotImportError && apiError.code === "INVALID_URL") {
+        throw apiError;
+      }
+    }
 
     try {
       const result = await fetchLotPage(url);

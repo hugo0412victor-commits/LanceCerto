@@ -31,7 +31,7 @@ export const USER_ROLE_LABELS: Record<UserRoleCode, string> = {
 };
 
 export const VEHICLE_STATUS_LABELS: Record<VehicleStatus, string> = {
-  ANALISE_LOTE: "Analise do lote",
+  ANALISE_LOTE: "Em analise",
   ARREMATADO: "Lote arrematado",
   AGUARDANDO_PAGAMENTO: "Aguardando pagamento",
   PAGO: "Pago",
@@ -46,7 +46,7 @@ export const VEHICLE_STATUS_LABELS: Record<VehicleStatus, string> = {
   DOCUMENTACAO: "Documentacao",
   PRECIFICACAO: "Precificacao",
   FOTOS_ANUNCIO: "Fotos para anuncio",
-  ANUNCIADO: "Anunciado",
+  ANUNCIADO: "Em venda",
   EM_NEGOCIACAO: "Em negociacao",
   VENDIDO: "Vendido",
   TRANSFERIDO: "Transferido",

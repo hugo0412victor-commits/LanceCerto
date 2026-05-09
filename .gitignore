@@ -8,3 +8,5 @@ dist
 public/uploads
 storage/uploads
 prisma/dev.db
+
+.vercel

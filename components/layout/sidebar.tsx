@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { CarFront, ChartColumn, ClipboardList, FileText, HandCoins, Images, LayoutDashboard, Menu, Megaphone, NotebookTabs, Settings2, ShoppingCart, Users, X } from "lucide-react";
+import { CarFront, ChartColumn, ClipboardList, FileText, HandCoins, LayoutDashboard, Menu, Megaphone, NotebookTabs, Settings2, ShoppingCart, Users, X } from "lucide-react";
 import { LanceCertoLogo } from "@/components/brand/lancecerto-logo";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -13,10 +13,9 @@ const items = [
   { href: "/vehicles", label: "Lotes / Veículos", icon: CarFront },
   { href: "/simulator", label: "Simulador", icon: ShoppingCart },
   { href: "/market-research", label: "Pesquisa de mercado", icon: ChartColumn },
-  { href: "/expenses", label: "Gastos", icon: HandCoins },
+  { href: "/expenses", label: "Financeiro", icon: HandCoins },
   { href: "/processes", label: "Processos", icon: ClipboardList },
   { href: "/documents", label: "Documentos", icon: FileText },
-  { href: "/photos", label: "Fotos", icon: Images },
   { href: "/sales", label: "Vendas", icon: Megaphone },
   { href: "/suppliers", label: "Fornecedores", icon: Users },
   { href: "/reports", label: "Relatórios", icon: NotebookTabs },

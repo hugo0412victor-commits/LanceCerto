@@ -506,7 +506,7 @@ export async function getSalesOverview() {
 
 export async function getReportsOverview() {
   const dashboard = await getDashboardData();
-  const [sales, suppliers] = await Promise.all([
+  const [sales, suppliers, checklistVehicles] = await Promise.all([
     prisma.sale.findMany({
       include: {
         vehicle: true
@@ -515,6 +515,18 @@ export async function getReportsOverview() {
     prisma.supplier.findMany({
       include: {
         expenses: true
+      }
+    }),
+    prisma.vehicle.findMany({
+      include: {
+        processes: {
+          include: {
+            processStep: true
+          }
+        }
+      },
+      orderBy: {
+        updatedAt: "desc"
       }
     })
   ]);
@@ -570,7 +582,28 @@ export async function getReportsOverview() {
           actualAmount: toNumber(expense.actualAmount)
         }))
       }))
-    )
+    ),
+    checklistRows: checklistVehicles.map((vehicle) => {
+      const inspectionProcess = vehicle.processes.find((process) => process.processStep.slug === "vistoria-inicial");
+      const inspectionPayload = parseInitialInspectionPayload(
+        inspectionProcess?.attachments && typeof inspectionProcess.attachments === "object"
+          ? (inspectionProcess.attachments as { inspectionChecklist?: unknown }).inspectionChecklist
+          : undefined
+      );
+      const inspectionSummary = getInitialInspectionSummary(inspectionPayload);
+
+      return {
+        vehicle: `${vehicle.stockCode ?? "Sem estoque"} - ${[vehicle.brand, vehicle.model].filter(Boolean).join(" ") || "Veiculo"}`,
+        status: vehicle.status,
+        completed: inspectionSummary.completed,
+        total: inspectionSummary.total,
+        progressPercent: inspectionSummary.progressPercent,
+        okCount: inspectionSummary.okCount,
+        attentionCount: inspectionSummary.attentionCount,
+        notOkCount: inspectionSummary.notOkCount,
+        hasChecklist: Boolean(inspectionProcess)
+      };
+    })
   };
 }
 

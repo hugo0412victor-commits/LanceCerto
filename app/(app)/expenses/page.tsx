@@ -15,7 +15,7 @@ export default async function ExpensesPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Financeiro"
-        title="Controle de gastos"
+        title="Financeiro"
         description="Lancamentos previstos e realizados por veiculo, fornecedor e categoria."
       />
 

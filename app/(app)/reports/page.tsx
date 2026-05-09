@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getReportsOverview } from "@/lib/data";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatPercent } from "@/lib/format";
 
 const exportTargets = [
   ["vehicles", "Veículos"],
@@ -56,6 +56,38 @@ export default async function ReportsPage() {
           ))}
         </CardContent>
       </Card>
+
+      <section id="checklists">
+        <Card>
+          <CardHeader title="Checklist de vistoria" description="Resumo dos checklists por veículo, concentrado na seção de relatórios." />
+          <CardContent className="space-y-3">
+            {report.checklistRows.map((row) => (
+              <div key={row.vehicle} className="rounded-[1.6rem] border border-border bg-background/55 p-4">
+                <div className="grid gap-3 md:grid-cols-5">
+                  <div className="md:col-span-2">
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted">Veículo</p>
+                    <p className="font-semibold">{row.vehicle}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted">Progresso</p>
+                    <p className="font-semibold">
+                      {row.completed}/{row.total} - {formatPercent(row.progressPercent)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted">Atenção</p>
+                    <p className="font-semibold">{row.attentionCount + row.notOkCount} itens</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted">Status</p>
+                    <p className="font-semibold">{row.hasChecklist ? "Registrado" : "Pendente"}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </section>
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { getServerAuthSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { LotImporter } from "@/lib/lot-importer";
@@ -11,27 +12,91 @@ import { runAutomaticMarketResearch } from "@/lib/market-research";
 import { AiAnalysisType, AiRiskLevel, MarketSourceType } from "@prisma/client";
 import { recalculateVehicleCostsFromExpenses, syncVehicleCoreExpenses } from "@/lib/vehicle-costs";
 import { canWrite } from "@/lib/permissions";
+import { canUseLocalBrowserFallback } from "@/lib/lot-importer/utils";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+function summarizeUrl(url?: string) {
+  if (!url) {
+    return undefined;
+  }
+
+  try {
+    const parsed = new URL(url);
+    return {
+      protocol: parsed.protocol,
+      hostname: parsed.hostname,
+      pathname: parsed.pathname
+    };
+  } catch {
+    return { invalid: true };
+  }
+}
+
+function logLotImport(level: "info" | "warn" | "error", requestId: string, event: string, meta?: Record<string, unknown>) {
+  console[level]("[lot-import]", {
+    requestId,
+    event,
+    ...meta
+  });
+}
 
 export async function POST(request: Request) {
+  const requestId = randomUUID();
+  const startedAt = Date.now();
+  let submittedUrl: string | undefined;
+
   try {
+    logLotImport("info", requestId, "request_started", {
+      nodeEnv: process.env.NODE_ENV,
+      vercel: process.env.VERCEL === "1",
+      vercelEnv: process.env.VERCEL_ENV,
+      hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
+      hasDatabaseUrlUnpooled: Boolean(process.env.DATABASE_URL_UNPOOLED),
+      hasNextAuthUrl: Boolean(process.env.NEXTAUTH_URL),
+      hasNextAuthSecret: Boolean(process.env.NEXTAUTH_SECRET),
+      localBrowserFallback: canUseLocalBrowserFallback()
+    });
+
     const session = await getServerAuthSession();
 
     if (!session) {
+      logLotImport("warn", requestId, "unauthorized");
       return NextResponse.json({ error: "Nao autorizado" }, { status: 401 });
     }
 
     if (!canWrite(session.user.role)) {
+      logLotImport("warn", requestId, "forbidden", {
+        role: session.user.role
+      });
       return NextResponse.json({ error: "Permissao insuficiente para importar lotes." }, { status: 403 });
     }
 
     const { url } = (await request.json()) as { url?: string };
+    submittedUrl = url;
 
     if (!url) {
+      logLotImport("warn", requestId, "missing_url");
       return NextResponse.json({ error: "Informe a URL do lote" }, { status: 400 });
     }
 
+    logLotImport("info", requestId, "import_started", {
+      url: summarizeUrl(url)
+    });
+
     const importer = new LotImporter();
     const result = await importer.importFromUrl(url);
+
+    logLotImport("info", requestId, "provider_finished", {
+      provider: result.provider,
+      status: result.status,
+      pendingFields: result.pendingFields,
+      alertsCount: result.alerts.length,
+      sourceMethod: typeof result.rawJson === "object" && result.rawJson ? (result.rawJson as { sourceMethod?: unknown }).sourceMethod : undefined
+    });
+
     const createdById = session.user.id || undefined;
     const automaticMarketResearch = await runAutomaticMarketResearch({
       brand: result.vehicleData.brand,
@@ -286,6 +351,11 @@ export async function POST(request: Request) {
       message: `Lote importado via ${result.provider}`
     });
 
+    logLotImport("info", requestId, "vehicle_created", {
+      vehicleId: vehicle.id,
+      durationMs: Date.now() - startedAt
+    });
+
     return NextResponse.json({
       ok: true,
       vehicleId: vehicle.id,
@@ -299,6 +369,15 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     if (error instanceof LotImportError) {
+      logLotImport("error", requestId, "lot_import_error", {
+        code: error.code,
+        httpStatus: error.httpStatus,
+        message: error.message,
+        details: error.details,
+        url: summarizeUrl(submittedUrl),
+        durationMs: Date.now() - startedAt
+      });
+
       return NextResponse.json(
         {
           ok: false,
@@ -309,6 +388,13 @@ export async function POST(request: Request) {
         { status: error.httpStatus }
       );
     }
+
+    logLotImport("error", requestId, "unexpected_error", {
+      message: error instanceof Error ? error.message : "unknown",
+      stack: error instanceof Error ? error.stack : undefined,
+      url: summarizeUrl(submittedUrl),
+      durationMs: Date.now() - startedAt
+    });
 
     return NextResponse.json(
       {

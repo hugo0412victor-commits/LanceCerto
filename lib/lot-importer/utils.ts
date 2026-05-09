@@ -26,6 +26,8 @@ const DEFAULT_HEADERS = {
   pragma: "no-cache"
 };
 
+const DEFAULT_FETCH_TIMEOUT_MS = 20000;
+
 const BLOCK_PATTERNS = [
   /_incapsula_resource/i,
   /access denied/i,
@@ -44,6 +46,37 @@ type LocalBrowserCandidate = {
 const LOCAL_BROWSER_CANDIDATES: LocalBrowserCandidate[] = buildLocalBrowserCandidates();
 
 const execFileAsync = promisify(execFile);
+
+function getFetchTimeoutMs() {
+  const configured = Number(process.env.LOT_IMPORT_FETCH_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_FETCH_TIMEOUT_MS;
+}
+
+export async function fetchWithTimeout(input: string | URL, init: RequestInit = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), getFetchTimeoutMs());
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export function canUseLocalBrowserFallback() {
+  if (process.env.LOT_IMPORT_ENABLE_BROWSER_FALLBACK) {
+    return process.env.LOT_IMPORT_ENABLE_BROWSER_FALLBACK === "true";
+  }
+
+  if (process.env.LOT_IMPORT_DISABLE_BROWSER_FALLBACK === "true") {
+    return false;
+  }
+
+  return process.env.NODE_ENV === "development" && process.env.VERCEL !== "1";
+}
 
 function escapePowerShellSingleQuoted(value: string) {
   return value.replace(/'/g, "''");
@@ -250,7 +283,7 @@ export async function fetchLotPage(url: string): Promise<FetchLotPageResult> {
   let response: Response;
 
   try {
-    response = await fetch(parsed.toString(), {
+    response = await fetchWithTimeout(parsed.toString(), {
       headers: DEFAULT_HEADERS,
       redirect: "follow",
       cache: "no-store"
@@ -309,6 +342,20 @@ export function findLocalBrowser() {
 
 export async function fetchLotPageWithLocalBrowser(url: string): Promise<FetchLotPageResult> {
   const parsed = validateLotUrl(url);
+
+  if (!canUseLocalBrowserFallback()) {
+    throw new LotImportError(
+      "A captura alternativa por navegador local esta desativada neste ambiente. Em producao na Vercel, use a API estruturada do lote ou revise os logs da funcao para entender o bloqueio do site de origem.",
+      "ACCESS_BLOCKED",
+      502,
+      {
+        url: parsed.toString(),
+        runtime: process.env.VERCEL === "1" ? "vercel" : process.env.NODE_ENV,
+        localBrowserFallback: false
+      }
+    );
+  }
+
   const browser = findLocalBrowser();
 
   if (!browser) {

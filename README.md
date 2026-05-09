@@ -280,14 +280,39 @@ Veja [`.env.example`](C:/Users/carlo/Documents/Codex/2026-04-30/regra-principal-
 
 Principais:
 
-- `DATABASE_URL`
-- `NEXTAUTH_URL`
-- `NEXTAUTH_SECRET`
+- `DATABASE_URL`: PostgreSQL usado pelo Prisma. Em producao na Vercel, nunca use `localhost`; use a connection string do PostgreSQL online.
+- `DATABASE_URL_UNPOOLED`: URL direta/unpooled usada pelo `directUrl` do Prisma. Configure junto com `DATABASE_URL` quando o provedor fornecer duas URLs.
+- `NEXTAUTH_URL`: URL publica do ambiente. Localmente use `http://localhost:3000`; em producao use o dominio HTTPS da Vercel.
+- `NEXTAUTH_SECRET`: segredo forte para assinar a sessao do NextAuth.
+- `NEXT_PUBLIC_APP_URL`: opcional; use a URL publica caso alguma integracao client-side passe a precisar dela.
 - `APP_DEMO_MODE`
 - `STORAGE_DRIVER`
 - `LOCAL_STORAGE_PATH`
 - `SYSTEM_NAME`
 - `COMPANY_NAME`
+- `LOT_IMPORT_FETCH_TIMEOUT_MS`: timeout das chamadas externas da importacao de lote.
+- `LOT_IMPORT_ENABLE_BROWSER_FALLBACK`: deixe `false` na Vercel. O fallback com navegador local depende de Chrome/Edge instalado e e indicado apenas para desenvolvimento/self-hosted.
+
+### Vercel e producao
+
+Para o site publicado funcionar, cadastre no painel da Vercel:
+
+- `DATABASE_URL` apontando para um PostgreSQL online;
+- `DATABASE_URL_UNPOOLED`, se o provedor disponibilizar URL direta/unpooled;
+- `NEXTAUTH_URL` com o dominio publicado, por exemplo `https://seu-projeto.vercel.app`;
+- `NEXTAUTH_SECRET` com valor seguro;
+- `APP_DEMO_MODE`, `SYSTEM_NAME` e `COMPANY_NAME` conforme o ambiente;
+- `STORAGE_DRIVER` e variaveis de storage externo quando uploads deixarem de usar disco local;
+- `LOT_IMPORT_FETCH_TIMEOUT_MS`, se quiser ajustar o timeout padrao de 20s.
+
+Depois de configurar um banco novo em producao, rode:
+
+```bash
+npx prisma migrate deploy
+npx prisma db seed
+```
+
+O seed e opcional quando voce nao quiser dados demo no banco online.
 
 ## Dados de demonstracao incluidos
 
@@ -331,8 +356,8 @@ Estas suposicoes foram adotadas para nao interromper o desenvolvimento e devem p
 ## Observacoes honestas sobre esta entrega
 
 - O projeto foi montado de forma funcional em codigo, com schema Prisma, seed, paginas, CRUDs centrais, uploads, dashboards e servicos.
-- Neste ambiente de trabalho, o runtime Node/Prisma nao ficou livre o bastante para eu executar `npm install`, `prisma migrate` e `next build` ate o fim.
-- Por isso, o codigo foi preparado e documentado para execucao local, mas a geracao efetiva da migration e a validacao final de runtime devem ser feitas por voce ao rodar os comandos acima.
+- A importacao por link roda no backend em `/api/lots/import`, com logs identificados por `[lot-import]` para consulta em Vercel > Functions > Logs.
+- Em producao serverless, nao ha navegador local instalado para contornar bloqueios anti-bot. Se o site de origem bloquear a API estruturada e o HTML direto, o erro sera registrado nos logs e o fluxo deve seguir por cadastro manual ou por integracao oficial/proxy apropriado.
 
 ## Proximo passo recomendado
 

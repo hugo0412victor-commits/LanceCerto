@@ -82,7 +82,7 @@ export function LotImportCard({ defaultUrl }: { defaultUrl?: string }) {
       setLoading(false);
       setFeedback({
         tone: "error",
-        items: ["Falha de conexao ao chamar a rota de importacao. Verifique se o sistema continua rodando localmente."]
+        items: ["Falha de conexao ao chamar a rota de importacao. No site publicado, confira os logs da funcao na Vercel."]
       });
     }
   }

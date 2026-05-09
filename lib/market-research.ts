@@ -1,7 +1,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { LiquidityLevel, MarketSourceType } from "@prisma/client";
-import { findLocalBrowser } from "@/lib/lot-importer/utils";
+import { canUseLocalBrowserFallback, findLocalBrowser } from "@/lib/lot-importer/utils";
 
 type VehicleMarketContext = {
   brand?: string | null;
@@ -161,6 +161,10 @@ async function fetchText(url: string, timeoutMs = 15000) {
 }
 
 async function fetchTextWithBrowser(url: string, timeoutMs = 25000) {
+  if (!canUseLocalBrowserFallback()) {
+    throw new Error("Fallback por navegador local indisponivel neste ambiente.");
+  }
+
   const browser = findLocalBrowser();
 
   if (!browser) {

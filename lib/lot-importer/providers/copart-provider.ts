@@ -9,6 +9,7 @@ import {
   extractLabeledValue,
   fetchLotPage,
   fetchLotPageWithLocalBrowser,
+  fetchWithTimeout,
   inferVehicleFromTitle,
   parseBooleanValue,
   parseCurrency,
@@ -110,7 +111,7 @@ async function fetchCopartLotDetails(url: string) {
   }
 
   const apiUrl = new URL(`/public/data/lotdetails/solr/${lotCode}`, `${parsed.protocol}//${parsed.hostname}`);
-  const response = await fetch(apiUrl, {
+  const response = await fetchWithTimeout(apiUrl, {
     headers: COPART_API_HEADERS,
     cache: "no-store"
   });
@@ -232,6 +233,12 @@ export class CopartLotProvider {
       if (apiError instanceof LotImportError && apiError.code === "INVALID_URL") {
         throw apiError;
       }
+
+      console.warn("[lot-import:copart] structured_api_failed", {
+        code: apiError instanceof LotImportError ? apiError.code : "UNKNOWN",
+        message: apiError instanceof Error ? apiError.message : "unknown",
+        details: apiError instanceof LotImportError ? apiError.details : undefined
+      });
     }
 
     try {
@@ -240,6 +247,10 @@ export class CopartLotProvider {
       html = result.html;
     } catch (error) {
       if (error instanceof LotImportError && error.code === "ACCESS_BLOCKED") {
+        console.warn("[lot-import:copart] direct_fetch_blocked_using_fallback", {
+          message: error.message,
+          details: error.details
+        });
         const result = await fetchLotPageWithLocalBrowser(url);
         context = result.context;
         html = result.html;

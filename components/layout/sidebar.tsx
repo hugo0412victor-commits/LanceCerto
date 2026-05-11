@@ -13,7 +13,7 @@ const items = [
   { href: "/vehicles", label: "Lotes / Veículos", icon: CarFront },
   { href: "/simulator", label: "Simulador", icon: ShoppingCart },
   { href: "/market-research", label: "Pesquisa de mercado", icon: ChartColumn },
-  { href: "/expenses", label: "Financeiro", icon: HandCoins },
+  { href: "/finance", label: "Financeiro", icon: HandCoins },
   { href: "/processes", label: "Processos", icon: ClipboardList },
   { href: "/documents", label: "Documentos", icon: FileText },
   { href: "/sales", label: "Vendas", icon: Megaphone },

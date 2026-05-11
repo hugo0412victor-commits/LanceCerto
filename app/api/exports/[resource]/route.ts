@@ -27,6 +27,26 @@ function toRows(resource: string, records: Record<string, unknown>[]): Record<st
         realizado: record.actualAmount,
         pagamento: record.paymentStatus
       }));
+    case "financial-ledger":
+      return records.map((record) => ({
+        data_competencia: record.competenceDate,
+        tipo: record.type,
+        status: record.status,
+        origem: record.sourceType,
+        descricao: record.description,
+        categoria: record.category,
+        subcategoria: record.subcategory,
+        veiculo: record.vehicle,
+        fornecedor: record.supplier,
+        cliente: record.customerName,
+        valor: record.amount,
+        valor_pago_recebido: record.paidAmount,
+        vencimento: record.dueDate,
+        pagamento: record.paidAt,
+        recebimento: record.receivedAt,
+        legado: record.isLegacy,
+        anomalo: record.isAnomalous
+      }));
     default:
       return records;
   }
@@ -78,6 +98,38 @@ export async function GET(
       predictedAmount: Number(expense.predictedAmount ?? 0),
       actualAmount: Number(expense.actualAmount ?? 0),
       paymentStatus: expense.paymentStatus
+    }));
+  } else if (resource === "financial-ledger") {
+    const entries = await prisma.financialEntry.findMany({
+      include: {
+        category: true,
+        subcategory: true,
+        vehicle: true,
+        supplier: true
+      },
+      orderBy: {
+        competenceDate: "desc"
+      },
+      take: 1000
+    });
+    rows = entries.map((entry) => ({
+      competenceDate: entry.competenceDate?.toISOString().slice(0, 10) ?? "",
+      type: entry.type,
+      status: entry.status,
+      sourceType: entry.sourceType,
+      description: entry.description,
+      category: entry.category?.name ?? "",
+      subcategory: entry.subcategory?.name ?? "",
+      vehicle: [entry.vehicle?.stockCode, entry.vehicle?.brand, entry.vehicle?.model].filter(Boolean).join(" "),
+      supplier: entry.supplier?.name ?? "",
+      customerName: entry.customerName ?? "",
+      amount: Number(entry.amount),
+      paidAmount: Number(entry.paidAmount ?? 0),
+      dueDate: entry.dueDate?.toISOString().slice(0, 10) ?? "",
+      paidAt: entry.paidAt?.toISOString().slice(0, 10) ?? "",
+      receivedAt: entry.receivedAt?.toISOString().slice(0, 10) ?? "",
+      isLegacy: entry.isLegacy ? "sim" : "nao",
+      isAnomalous: entry.isAnomalous ? "sim" : "nao"
     }));
   } else if (resource === "simulations") {
     const simulations = await prisma.simulation.findMany();

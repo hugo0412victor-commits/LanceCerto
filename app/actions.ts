@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { AiAnalysisType, AiRiskLevel, LiquidityLevel, MarketSourceType, PaymentMethod, PaymentStatus, Prisma, SellerType, StepExecutionStatus, VehicleStatus } from "@prisma/client";
+import { AiAnalysisType, AiRiskLevel, FinancialEntryStatus, FinancialEntryType, LiquidityLevel, MarketSourceType, PaymentMethod, PaymentStatus, Prisma, SellerType, StepExecutionStatus, VehicleStatus } from "@prisma/client";
 import { getServerAuthSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
@@ -14,6 +14,7 @@ import { VEHICLE_STATUS_LABELS } from "@/lib/constants";
 import { assertAdmin, assertCanDelete, assertCanWrite } from "@/lib/permissions";
 import { parseBoolean, parseDate, parseInteger, parseNumber } from "@/lib/utils";
 import { recalculateVehicleCostsFromExpenses, syncVehicleCoreExpenses } from "@/lib/vehicle-costs";
+import { createManualFinancialEntry, refreshVehicleFinancialSummary, syncFinancialLedgerFromLegacy } from "@/lib/financial-ledger";
 
 function detectPendingVehicleFields(data: {
   brand?: string;
@@ -185,6 +186,7 @@ export async function saveVehicleAction(formData: FormData) {
 
   await syncVehicleCoreExpenses(prisma, savedVehicle.id, normalizedPayload);
   await recalculateVehicleCostsFromExpenses(prisma, savedVehicle.id);
+  await syncFinancialLedgerFromLegacy(prisma);
 
   const score = calculateOpportunityScore({
     discountToFipePercent:
@@ -345,6 +347,7 @@ export async function saveExpenseAction(formData: FormData) {
       });
 
   await recalculateVehicleCostsFromExpenses(prisma, vehicleId);
+  await syncFinancialLedgerFromLegacy(prisma);
 
   await createAuditLog({
     userId: session?.user.id,
@@ -356,6 +359,7 @@ export async function saveExpenseAction(formData: FormData) {
   });
 
   revalidatePath("/expenses");
+  revalidatePath("/finance");
   revalidatePath(`/vehicles/${vehicleId}`);
 }
 
@@ -630,6 +634,8 @@ export async function saveSaleAction(formData: FormData) {
       actualRoi: normalizeMoneyValue(roi ?? undefined)
     }
   });
+  await syncFinancialLedgerFromLegacy(prisma);
+  await refreshVehicleFinancialSummary(prisma, vehicleId);
 
   await createAuditLog({
     userId: session?.user.id,
@@ -641,6 +647,136 @@ export async function saveSaleAction(formData: FormData) {
 
   revalidatePath("/sales");
   revalidatePath(`/vehicles/${vehicleId}`);
+}
+
+export async function saveManualFinancialEntryAction(formData: FormData) {
+  const session = await getServerAuthSession();
+  assertCanWrite(session?.user.role);
+
+  const type = String(formData.get("type") ?? "OUT") === "IN" ? FinancialEntryType.IN : FinancialEntryType.OUT;
+  const vehicleId = String(formData.get("vehicleId") ?? "").trim() || undefined;
+  const amount = parseNumber(formData.get("amount")) ?? 0;
+
+  if (amount <= 0) {
+    return;
+  }
+
+  const statusValue = String(formData.get("status") ?? "").trim() as FinancialEntryStatus;
+  const status = Object.values(FinancialEntryStatus).includes(statusValue) ? statusValue : undefined;
+
+  const entry = await createManualFinancialEntry(prisma, {
+    type,
+    description: String(formData.get("description") ?? "").trim() || (type === FinancialEntryType.IN ? "Entrada manual" : "Saida manual"),
+    amount,
+    categoryId: String(formData.get("categoryId") ?? "").trim() || undefined,
+    vehicleId,
+    supplierId: String(formData.get("supplierId") ?? "").trim() || undefined,
+    customerName: String(formData.get("customerName") ?? "").trim() || undefined,
+    dueDate: parseDate(formData.get("dueDate")),
+    competenceDate: parseDate(formData.get("competenceDate")),
+    paidAt: parseDate(formData.get("paidAt")),
+    receivedAt: parseDate(formData.get("receivedAt")),
+    status,
+    paymentMethod: (String(formData.get("paymentMethod") ?? "") as PaymentMethod) || undefined,
+    notes: String(formData.get("notes") ?? "").trim() || undefined,
+    createdById: session?.user.id
+  });
+
+  await createAuditLog({
+    userId: session?.user.id,
+    entityType: "FinancialEntry",
+    entityId: entry.id,
+    action: "CREATE",
+    message: "Lancamento financeiro manual criado"
+  });
+
+  revalidatePath("/expenses");
+  revalidatePath("/finance");
+  if (vehicleId) {
+    revalidatePath(`/vehicles/${vehicleId}`);
+  }
+}
+
+export async function updateFinancialEntryStatusAction(formData: FormData) {
+  const session = await getServerAuthSession();
+  assertCanWrite(session?.user.role);
+
+  const entryId = String(formData.get("entryId") ?? "").trim();
+  const statusValue = String(formData.get("status") ?? "").trim() as FinancialEntryStatus;
+
+  if (!entryId || !Object.values(FinancialEntryStatus).includes(statusValue)) {
+    return;
+  }
+
+  const current = await prisma.financialEntry.findUnique({
+    where: {
+      id: entryId
+    },
+    select: {
+      id: true,
+      type: true,
+      amount: true,
+      vehicleId: true
+    }
+  });
+
+  if (!current) {
+    return;
+  }
+
+  const isSettledOut = statusValue === FinancialEntryStatus.PAID;
+  const isSettledIn = statusValue === FinancialEntryStatus.RECEIVED;
+  const isOpen = statusValue === FinancialEntryStatus.PENDING || statusValue === FinancialEntryStatus.OVERDUE || statusValue === FinancialEntryStatus.CANCELLED;
+  const paidAmount = isSettledOut || isSettledIn ? current.amount : isOpen ? new Prisma.Decimal(0) : undefined;
+
+  const entry = await prisma.financialEntry.update({
+    where: {
+      id: entryId
+    },
+    data: {
+      status: statusValue,
+      paidAmount,
+      paidAt: current.type === FinancialEntryType.OUT && isSettledOut ? new Date() : isOpen ? null : undefined,
+      receivedAt: current.type === FinancialEntryType.IN && isSettledIn ? new Date() : isOpen ? null : undefined
+    }
+  });
+
+  await prisma.payable.updateMany({
+    where: {
+      transactionId: entry.id
+    },
+    data: {
+      status: statusValue,
+      paidAmount: paidAmount ?? undefined
+    }
+  });
+
+  await prisma.receivable.updateMany({
+    where: {
+      transactionId: entry.id
+    },
+    data: {
+      status: statusValue,
+      receivedAmount: paidAmount ?? undefined
+    }
+  });
+
+  if (entry.vehicleId) {
+    await refreshVehicleFinancialSummary(prisma, entry.vehicleId);
+    revalidatePath(`/vehicles/${entry.vehicleId}`);
+  }
+
+  await createAuditLog({
+    userId: session?.user.id,
+    entityType: "FinancialEntry",
+    entityId: entry.id,
+    action: "STATUS_UPDATE",
+    afterData: { status: statusValue },
+    message: "Status financeiro atualizado"
+  });
+
+  revalidatePath("/expenses");
+  revalidatePath("/finance");
 }
 
 export async function updateVehicleStatusAction(formData: FormData) {
@@ -873,25 +1009,44 @@ export async function deleteExpenseAction(formData: FormData) {
     return;
   }
 
-  await prisma.expense.delete({
+  await prisma.expense.update({
     where: {
       id
+    },
+    data: {
+      predictedAmount: new Prisma.Decimal(0),
+      actualAmount: new Prisma.Decimal(0),
+      paymentStatus: PaymentStatus.CANCELLED,
+      note: "Despesa preservada e cancelada por solicitacao do usuario."
+    }
+  });
+
+  await prisma.financialEntry.updateMany({
+    where: {
+      sourceType: "EXPENSE",
+      sourceId: id
+    },
+    data: {
+      status: "CANCELLED",
+      notes: "Lancamento legado preservado apos exclusao da despesa original."
     }
   });
 
   if (vehicleId) {
     await recalculateVehicleCostsFromExpenses(prisma, vehicleId);
+    await refreshVehicleFinancialSummary(prisma, vehicleId);
   }
 
   await createAuditLog({
     userId: session?.user.id,
     entityType: "Expense",
     entityId: id,
-    action: "DELETE",
-    message: "Gasto excluido"
+    action: "CANCEL",
+    message: "Gasto cancelado sem apagar o registro original"
   });
 
   revalidatePath("/expenses");
+  revalidatePath("/finance");
   if (vehicleId) {
     revalidatePath(`/vehicles/${vehicleId}`);
   }

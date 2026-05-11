@@ -107,6 +107,7 @@ export default async function VehicleDetailPage({
   const latestSimulation = vehicle.simulations[0];
   const latestRisk = vehicle.aiAnalyses.find((item) => item.analysisType === "LOT_RISK");
   const heroImageUrl = vehicle.photos[0]?.publicUrl ?? vehicle.mainPhotoUrl ?? vehicle.lotSnapshots[0]?.photoUrls?.[0] ?? "/placeholders/vehicle-1.svg";
+  const vehicleDisplayName = vehicle.displayName ?? [vehicle.brand, vehicle.model, vehicle.version].filter(Boolean).join(" ");
   const latestSnapshotRaw = vehicle.lotSnapshots[0]?.rawJson as
     | { extractedFields?: { runningConditionText?: string; auctionDateText?: string } }
     | undefined;
@@ -128,6 +129,8 @@ export default async function VehicleDetailPage({
   const totalPredictedCostValue = expenseTotals.predictedCost || Number(vehicle.totalPredictedCost ?? 0);
   const predictedProfitValue = Number(vehicle.predictedProfit ?? 0);
   const predictedMarginValue = Number(vehicle.predictedMargin ?? 0);
+  const financialSummary = vehicle.financialSummary;
+  const financialEntries = vehicle.financialEntries ?? [];
   const minimumAcceptablePriceValue =
     totalCurrentCostValue > 0 ? totalCurrentCostValue * 1.1 : Number(vehicle.minimumAcceptablePrice ?? 0);
 
@@ -172,9 +175,12 @@ export default async function VehicleDetailPage({
     ["Pátio", vehicle.yard ?? "Pendente"],
     ["Cidade/UF", [vehicle.city, vehicle.state].filter(Boolean).join("/") || "Pendente"],
     ["Ano", [vehicle.manufacturingYear, vehicle.modelYear].filter(Boolean).join("/") || "Pendente"],
-    ["KM", vehicle.mileage ? `${vehicle.mileage.toLocaleString("pt-BR")} km` : "Pendente"],
+    ["KM", vehicle.mileage ? `${vehicle.mileage.toLocaleString("pt-BR")} ${vehicle.mileageUnit ?? "km"}` : "Pendente"],
     ["Documento", vehicle.documentType ?? "Pendente"],
+    ["Comitente", vehicle.sellerName ?? "Pendente"],
+    ["Lote/Vaga", vehicle.yardSlot ?? "Pendente"],
     ["Chave", vehicle.hasKey === true ? "Sim" : vehicle.hasKey === false ? "Não" : "Pendente"],
+    ["Blindado", vehicle.armored === true ? "Sim" : vehicle.armored === false ? "Não" : "Pendente"],
     ["Funcionamento", runningConditionLabel],
     ["Condição", vehicle.condition ?? "Pendente"]
   ];
@@ -221,7 +227,7 @@ export default async function VehicleDetailPage({
     <div className="space-y-6">
       <PageHeader
         eyebrow="Resumo do veículo"
-        title={[vehicle.brand, vehicle.model, vehicle.version].filter(Boolean).join(" ") || "Veículo"}
+        title={vehicleDisplayName || "Veículo"}
         description="Visão executiva com dados principais, valores, score, status e resumo financeiro. Os detalhes operacionais ficam nas áreas próprias do sistema."
       />
 
@@ -236,7 +242,7 @@ export default async function VehicleDetailPage({
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-accent">Ficha resumida</p>
                 <h2 className="mt-2 font-display text-3xl font-bold tracking-[-0.05em] text-primary">
-                  {[vehicle.brand, vehicle.model, vehicle.version].filter(Boolean).join(" ") || "Veículo em análise"}
+                  {vehicleDisplayName || "Veículo em análise"}
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-muted">
                   {vehicle.notes ?? "Resumo operacional pronto para consulta rápida."}
@@ -262,6 +268,22 @@ export default async function VehicleDetailPage({
           </div>
         </CardContent>
       </Card>
+
+      {vehicle.photos.length > 0 ? (
+        <Card>
+          <CardHeader title="Fotos do lote" description="Galeria importada e preservada no LanceCerto." />
+          <CardContent className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-6">
+            {vehicle.photos.map((photo, index) => (
+              <a key={photo.id} href={photo.publicUrl} target="_blank" rel="noreferrer" className="overflow-hidden rounded-2xl border border-border bg-white">
+                <img src={photo.thumbnailUrl ?? photo.publicUrl} alt={photo.caption ?? `Foto ${index + 1}`} className="h-28 w-full object-cover" />
+                <div className="px-3 py-2 text-xs text-muted">
+                  #{photo.sequenceNumber ?? index + 1} {photo.imageType ? `- ${photo.imageType}` : ""}
+                </div>
+              </a>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid items-stretch gap-6 xl:grid-cols-[1.05fr_0.95fr]">
         <div className="grid h-full gap-6 xl:grid-rows-[1fr_1fr]">
@@ -437,6 +459,59 @@ export default async function VehicleDetailPage({
               <p className="mt-2 text-sm leading-6 text-muted">{item.description}</p>
             </Link>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader title="Financeiro do veículo" description="Centro de custo individual com despesas, contas, recebimentos, margem, ROI e histórico do livro razão." />
+        <CardContent className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[
+              ["Investido", Number(financialSummary?.totalCost ?? totalCurrentCostValue)],
+              ["Pendente a pagar", Number(financialSummary?.pendingExpenses ?? 0)],
+              ["Venda prevista", Number(financialSummary?.expectedSalePrice ?? vehicle.predictedSalePrice ?? 0)],
+              ["Venda realizada", Number(financialSummary?.actualSalePrice ?? vehicle.actualSalePrice ?? 0)],
+              ["Recebido", Number(financialSummary?.receivedAmount ?? 0)],
+              ["Saldo a receber", Number(financialSummary?.receivableBalance ?? 0)],
+              ["Lucro líquido", Number(financialSummary?.netProfit ?? vehicle.actualProfit ?? 0)],
+              ["ROI", Number(financialSummary?.roiPercent ?? vehicle.actualRoi ?? 0)]
+            ].map(([label, value]) => (
+              <div key={String(label)} className="rounded-2xl border border-border bg-white/75 p-4">
+                <p className="text-xs uppercase tracking-[0.16em] text-muted">{label}</p>
+                <p className="mt-2 text-lg font-semibold text-primary">
+                  {label === "ROI" ? formatPercent(Number(value)) : formatCurrency(Number(value))}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="overflow-x-auto rounded-2xl border border-border bg-white/75">
+            <table className="min-w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-border bg-background/70 text-muted">
+                  <th className="px-4 py-3 font-medium">Movimentação</th>
+                  <th className="px-4 py-3 font-medium">Origem</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 text-right font-medium">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {financialEntries.slice(0, 10).map((entry) => (
+                  <tr key={entry.id} className="border-b border-border/60">
+                    <td className="px-4 py-3">
+                      <p className="font-semibold">{entry.description}</p>
+                      <p className="text-xs text-muted">{entry.category?.name ?? "Sem categoria"} • {formatDateTime(entry.competenceDate ?? entry.createdAt)}</p>
+                    </td>
+                    <td className="px-4 py-3">{entry.sourceType}</td>
+                    <td className="px-4 py-3">{entry.status}</td>
+                    <td className={`px-4 py-3 text-right font-semibold ${entry.type === "IN" ? "text-emerald-700" : "text-slate-900"}`}>
+                      {entry.type === "IN" ? "+" : "-"} {formatCurrency(Number(entry.amount))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </CardContent>
       </Card>
     </div>

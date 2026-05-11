@@ -190,6 +190,74 @@ enum CashFlowStatus {
   CANCELLED
 }
 
+enum FinancialEntryType {
+  IN
+  OUT
+  TRANSFER
+  ADJUSTMENT
+}
+
+enum FinancialEntryStatus {
+  PENDING
+  PAID
+  RECEIVED
+  OVERDUE
+  PARTIAL
+  CANCELLED
+}
+
+enum FinancialEntrySourceType {
+  EXPENSE
+  VEHICLE_CORE_COST
+  SALE
+  CASHFLOW_LEGACY
+  MANUAL
+  SYSTEM
+}
+
+enum FinancialCategoryType {
+  INCOME
+  EXPENSE
+  TRANSFER
+  ADJUSTMENT
+}
+
+enum FinancialCategoryScope {
+  VEHICLE
+  OPERATIONAL
+  SALE
+  COMMISSION
+  TAX
+  OTHER
+}
+
+enum PayablePriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum FinancialAccountType {
+  CASH
+  CHECKING
+  SAVINGS
+  CREDIT
+  OTHER
+}
+
+enum PartnerType {
+  BUYER
+  SELLER
+  DISPATCHER
+  MECHANIC
+  BODY_SHOP
+  PHOTOGRAPHER
+  INTERMEDIARY
+  CONSULTANT
+  OTHER
+}
+
 enum LiquidityLevel {
   HIGH
   MEDIUM
@@ -237,6 +305,7 @@ model User {
   uploadedPhotos    VehiclePhoto[]   @relation("PhotoUploadedBy")
   assignedProcesses VehicleProcess[] @relation("ProcessAssignedTo")
   auditLogs         AuditLog[]
+  financialEntries  FinancialEntry[]
 }
 
 model AuctionHouse {
@@ -259,6 +328,7 @@ model Vehicle {
   title                  String?
   lotUrl                 String?
   lotCode                String?
+  sourceProvider         String?
   auctionHouseId         String?
   createdById            String?
   status                 VehicleStatus      @default(ANALISE_LOTE)
@@ -267,6 +337,8 @@ model Vehicle {
   version                String?
   manufacturingYear      Int?
   modelYear              Int?
+  displayName            String?
+  armored                Boolean?
   plate                  String?
   plateFinal             String?
   chassis                String?
@@ -275,19 +347,40 @@ model Vehicle {
   fuel                   String?
   transmission           String?
   mileage                Int?
+  mileageUnit            String?
+  category               String?
   documentType           String?
+  documentTypeCode       String?
+  sellerName             String?
   mountType              String?
+  damageDescription      String?
   condition              String?
   hasKey                 Boolean?
   runningCondition       Boolean?
   yard                   String?
+  auctionYard            String?
+  vehicleYard            String?
+  yardNumber             String?
+  yardSpace              String?
+  yardSlot               String?
+  physicalYardNumber     String?
+  yardCode               String?
   city                   String?
   state                  String?
   auctionDate            DateTime?
+  saleDateTimestamp      String?
+  sold                   Boolean?
+  saleStatus             String?
   bidDate                DateTime?
   fipeValue              Decimal?           @db.Decimal(14, 2)
   marketEstimatedValue   Decimal?           @db.Decimal(14, 2)
   bidValue               Decimal?           @db.Decimal(14, 2)
+  currentBid             Decimal?           @db.Decimal(14, 2)
+  bidIncrement           Decimal?           @db.Decimal(14, 2)
+  buyNowPrice            Decimal?           @db.Decimal(14, 2)
+  highestBid             Decimal?           @db.Decimal(14, 2)
+  myBid                  Decimal?           @db.Decimal(14, 2)
+  currency               String?
   auctionCommission      Decimal?           @db.Decimal(14, 2)
   administrativeFees     Decimal?           @db.Decimal(14, 2)
   yardCost               Decimal?           @db.Decimal(14, 2)
@@ -312,6 +405,8 @@ model Vehicle {
   pendingFields          String[]           @default([])
   alerts                 String[]           @default([])
   notes                  String?
+  documentsUrl           String?
+  specificConditionsUrl  String?
   rawMetadata            Json?
   mainPhotoUrl           String?
   createdAt              DateTime           @default(now())
@@ -329,6 +424,11 @@ model Vehicle {
   advertisements         Advertisement[]
   leads                  Lead[]
   cashFlows              CashFlow[]
+  financialEntries       FinancialEntry[]
+  payables               Payable[]
+  receivables            Receivable[]
+  financialSummary       VehicleFinancialSummary?
+  partnerCommissions     PartnerCommission[]
   opportunityScore       OpportunityScore?
   aiAnalyses             AiAnalysis[]
 }
@@ -382,6 +482,10 @@ model VehiclePhoto {
   caption      String?
   storagePath  String
   publicUrl    String
+  thumbnailUrl String?
+  imageType    String?
+  sequenceNumber Int?
+  source       String?
   sortOrder    Int           @default(0)
   isPrimary    Boolean       @default(false)
   sourceUrl    String?
@@ -592,6 +696,8 @@ model Sale {
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
   vehicle              Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  receivables          Receivable[]
+  partnerCommissions   PartnerCommission[]
 }
 
 model Supplier {
@@ -612,6 +718,8 @@ model Supplier {
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
   expenses      Expense[]
+  financialEntries FinancialEntry[]
+  payables      Payable[]
 }
 
 model Advertisement {
@@ -664,6 +772,185 @@ model CashFlow {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   vehicle       Vehicle?       @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+}
+
+model FinancialCategory {
+  id            String                 @id @default(cuid())
+  name          String
+  type          FinancialCategoryType
+  scope         FinancialCategoryScope @default(OTHER)
+  isDefault     Boolean                @default(false)
+  legacyExpenseCategoryCode ExpenseCategoryType?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  entries       FinancialEntry[]
+  subcategories FinancialSubcategory[]
+
+  @@unique([name, type, scope])
+}
+
+model FinancialSubcategory {
+  id         String            @id @default(cuid())
+  name       String
+  categoryId String
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  category   FinancialCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  entries    FinancialEntry[]
+
+  @@unique([categoryId, name])
+}
+
+model FinancialAccount {
+  id             String               @id @default(cuid())
+  name           String
+  type           FinancialAccountType @default(CHECKING)
+  openingBalance Decimal              @default(0) @db.Decimal(14, 2)
+  currentBalance Decimal              @default(0) @db.Decimal(14, 2)
+  active         Boolean              @default(true)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  entries        FinancialEntry[]
+}
+
+model FinancialPartner {
+  id                 String              @id @default(cuid())
+  name               String
+  type               PartnerType         @default(OTHER)
+  document           String?
+  phone              String?
+  email              String?
+  notes              String?
+  active             Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  financialEntries   FinancialEntry[]
+  partnerCommissions PartnerCommission[]
+}
+
+model FinancialEntry {
+  id              String                   @id @default(cuid())
+  type            FinancialEntryType
+  status          FinancialEntryStatus     @default(PENDING)
+  sourceType      FinancialEntrySourceType @default(MANUAL)
+  sourceId        String
+  legacyReference String?
+  description     String
+  amount          Decimal                  @db.Decimal(14, 2)
+  paidAmount      Decimal?                 @db.Decimal(14, 2)
+  categoryId      String?
+  subcategoryId   String?
+  accountId       String?
+  vehicleId       String?
+  supplierId      String?
+  partnerId       String?
+  customerName    String?
+  dueDate         DateTime?
+  competenceDate  DateTime?
+  paidAt          DateTime?
+  receivedAt      DateTime?
+  paymentMethod   PaymentMethod?
+  notes           String?
+  attachmentUrl   String?
+  isLegacy        Boolean                  @default(false)
+  isAnomalous     Boolean                  @default(false)
+  validatedAt     DateTime?
+  createdById     String?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  category        FinancialCategory?       @relation(fields: [categoryId], references: [id])
+  subcategory     FinancialSubcategory?    @relation(fields: [subcategoryId], references: [id])
+  account         FinancialAccount?        @relation(fields: [accountId], references: [id])
+  vehicle         Vehicle?                 @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  supplier        Supplier?                @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  partner         FinancialPartner?        @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  createdBy       User?                    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  payable         Payable?
+  receivable      Receivable?
+
+  @@unique([sourceType, sourceId])
+  @@index([vehicleId])
+  @@index([type, status])
+  @@index([dueDate])
+  @@index([competenceDate])
+}
+
+model Payable {
+  id            String               @id @default(cuid())
+  transactionId String               @unique
+  supplierId    String?
+  vehicleId     String?
+  amount        Decimal              @db.Decimal(14, 2)
+  paidAmount    Decimal              @default(0) @db.Decimal(14, 2)
+  dueDate       DateTime?
+  status        FinancialEntryStatus @default(PENDING)
+  priority      PayablePriority      @default(NORMAL)
+  recurrence    String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  transaction   FinancialEntry       @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  supplier      Supplier?            @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  vehicle       Vehicle?             @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+}
+
+model Receivable {
+  id                String               @id @default(cuid())
+  transactionId     String               @unique
+  vehicleId         String?
+  saleId            String?
+  customerName      String?
+  amount            Decimal              @db.Decimal(14, 2)
+  receivedAmount    Decimal              @default(0) @db.Decimal(14, 2)
+  dueDate           DateTime?
+  status            FinancialEntryStatus @default(PENDING)
+  installmentNumber Int?
+  totalInstallments Int?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  transaction       FinancialEntry       @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  vehicle           Vehicle?             @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  sale              Sale?                @relation(fields: [saleId], references: [id], onDelete: SetNull)
+}
+
+model VehicleFinancialSummary {
+  id                String   @id @default(cuid())
+  vehicleId         String   @unique
+  purchaseAmount    Decimal  @default(0) @db.Decimal(14, 2)
+  auctionFees       Decimal  @default(0) @db.Decimal(14, 2)
+  transportCost     Decimal  @default(0) @db.Decimal(14, 2)
+  documentationCost Decimal  @default(0) @db.Decimal(14, 2)
+  repairCost        Decimal  @default(0) @db.Decimal(14, 2)
+  sellingCost       Decimal  @default(0) @db.Decimal(14, 2)
+  totalCost         Decimal  @default(0) @db.Decimal(14, 2)
+  pendingExpenses   Decimal  @default(0) @db.Decimal(14, 2)
+  expectedSalePrice Decimal  @default(0) @db.Decimal(14, 2)
+  actualSalePrice   Decimal  @default(0) @db.Decimal(14, 2)
+  receivedAmount    Decimal  @default(0) @db.Decimal(14, 2)
+  receivableBalance Decimal  @default(0) @db.Decimal(14, 2)
+  grossProfit       Decimal  @default(0) @db.Decimal(14, 2)
+  netProfit         Decimal  @default(0) @db.Decimal(14, 2)
+  marginPercent     Decimal  @default(0) @db.Decimal(7, 2)
+  roiPercent        Decimal  @default(0) @db.Decimal(7, 2)
+  financialStatus   String   @default("PENDING")
+  updatedAt         DateTime @updatedAt
+  vehicle           Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+}
+
+model PartnerCommission {
+  id        String               @id @default(cuid())
+  partnerId String?
+  vehicleId String?
+  saleId    String?
+  amount    Decimal              @db.Decimal(14, 2)
+  dueDate   DateTime?
+  paidAt    DateTime?
+  status    FinancialEntryStatus @default(PENDING)
+  notes     String?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  partner   FinancialPartner?    @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  vehicle   Vehicle?             @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  sale      Sale?                @relation(fields: [saleId], references: [id], onDelete: SetNull)
 }
 
 model AuditLog {

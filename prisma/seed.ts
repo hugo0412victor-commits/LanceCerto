@@ -5,6 +5,7 @@ import { defaultSettings } from "../lib/default-settings";
 import { calculateOpportunityScore } from "../lib/scoring";
 import { generateAdCopy, generateLotRiskAnalysis } from "../lib/ai";
 import { calculateVehicleFinancials } from "../lib/calculations";
+import { syncFinancialLedgerFromLegacy } from "../lib/financial-ledger";
 
 const prisma = new PrismaClient();
 
@@ -58,6 +59,15 @@ const INITIAL_USERS = [
 ] as const;
 
 async function resetDatabase() {
+  await prisma.partnerCommission.deleteMany();
+  await prisma.receivable.deleteMany();
+  await prisma.payable.deleteMany();
+  await prisma.vehicleFinancialSummary.deleteMany();
+  await prisma.financialEntry.deleteMany();
+  await prisma.financialSubcategory.deleteMany();
+  await prisma.financialCategory.deleteMany();
+  await prisma.financialAccount.deleteMany();
+  await prisma.financialPartner.deleteMany();
   await prisma.aiAnalysis.deleteMany();
   await prisma.opportunityScore.deleteMany();
   await prisma.auditLog.deleteMany();
@@ -1113,10 +1123,15 @@ async function seedVehicles() {
 }
 
 async function main() {
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_DESTRUCTIVE_SEED !== "true") {
+    throw new Error("Seed bloqueado em producao. Defina ALLOW_DESTRUCTIVE_SEED=true apenas se quiser recriar dados demo conscientemente.");
+  }
+
   await resetDatabase();
   await seedBaseData();
   await seedAuthUsers();
   await seedVehicles();
+  await syncFinancialLedgerFromLegacy(prisma);
 }
 
 main()

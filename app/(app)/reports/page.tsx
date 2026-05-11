@@ -10,7 +10,8 @@ import { formatCurrency, formatPercent } from "@/lib/format";
 
 const exportTargets = [
   ["vehicles", "Veículos"],
-  ["expenses", "Gastos"],
+  ["financial-ledger", "Livro razÃ£o"],
+  ["expenses", "Despesas legadas"],
   ["simulations", "Simulações"],
   ["market-research", "Pesquisa de mercado"]
 ] as const;

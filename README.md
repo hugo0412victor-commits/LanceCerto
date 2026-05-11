@@ -81,6 +81,17 @@ Essa regra esta registrada em [REQUISITOS.md](C:/Users/carlo/Documents/Codex/202
 - estrutura para portais de venda
 - interfaces de integracao para mercado e anuncios
 
+### Fase Financeiro
+
+- livro razao central em `FinancialEntry`
+- categorias, subcategorias, contas financeiras e parceiros financeiros
+- contas a pagar e contas a receber derivadas dos lancamentos
+- resumo financeiro por veiculo em `VehicleFinancialSummary`
+- cada veiculo tratado como centro de custo e resultado
+- sincronizacao idempotente dos dados antigos de `Expense`, `Sale`, `CashFlow` e campos financeiros de `Vehicle`
+- preservacao das tabelas antigas para compatibilidade
+- `CashFlow` legado/anomalo preservado e marcado fora dos calculos principais ate validacao
+
 ## Estrutura principal
 
 ```text
@@ -153,6 +164,15 @@ O schema Prisma contempla os models pedidos no briefing:
 - `Advertisement`
 - `Lead`
 - `CashFlow`
+- `FinancialEntry`
+- `FinancialCategory`
+- `FinancialSubcategory`
+- `FinancialAccount`
+- `FinancialPartner`
+- `Payable`
+- `Receivable`
+- `VehicleFinancialSummary`
+- `PartnerCommission`
 - `AuditLog`
 - `Setting`
 - `OpportunityScore`
@@ -166,7 +186,8 @@ O schema Prisma contempla os models pedidos no briefing:
 - `/vehicles/[id]`: detalhe completo do veiculo com abas/secoes
 - `/simulator`: simulador de arremate
 - `/market-research`: pesquisa de mercado
-- `/expenses`: financeiro por gasto
+- `/finance`: financeiro completo, livro razao, contas, centros de custo e gastos legados
+- `/expenses`: rota antiga mantida para compatibilidade com o modulo de gastos legado
 - `/processes`: kanban operacional
 - `/documents`: repositorio de documentos
 - `/photos`: galeria global
@@ -242,19 +263,35 @@ Copy-Item .env.example .env
 npm run db:migrate
 ```
 
-5. Popule dados demo:
+Em ambientes nao interativos ou producao, use:
+
+```bash
+npx prisma migrate deploy
+```
+
+5. Sincronize o livro razao financeiro sem apagar dados:
+
+```bash
+npm run finance:sync
+```
+
+Esse comando e idempotente. Ele usa `sourceType`, `sourceId` e `legacyReference` para evitar duplicidade quando executado mais de uma vez.
+
+6. Popule dados demo somente em ambiente local/dev:
 
 ```bash
 npm run db:seed
 ```
 
-6. Rode o servidor:
+O seed recria dados demo e nao deve ser usado sobre banco real. Em producao ele e bloqueado por padrao; para rodar conscientemente seria necessario definir `ALLOW_DESTRUCTIVE_SEED=true`.
+
+7. Rode o servidor:
 
 ```bash
 npm run dev
 ```
 
-7. Acesse:
+8. Acesse:
 
 - `http://localhost:3000`
 
@@ -309,10 +346,36 @@ Depois de configurar um banco novo em producao, rode:
 
 ```bash
 npx prisma migrate deploy
-npx prisma db seed
+npm run finance:sync
 ```
 
-O seed e opcional quando voce nao quiser dados demo no banco online.
+Nao rode seed em producao para bases reais. O seed e destrutivo por natureza demo e fica bloqueado em `NODE_ENV=production` sem `ALLOW_DESTRUCTIVE_SEED=true`.
+
+### Migracao financeira segura
+
+A migration `20260510120000_add_financial_ledger` e apenas aditiva: cria novas tabelas, enums, indices e relacionamentos. Ela nao usa `DROP`, nao apaga tabelas antigas e nao altera registros antigos.
+
+Mapeamento preservado:
+
+- `Expense` vira `FinancialEntry` de saida com `sourceType=EXPENSE` e cria/atualiza `Payable`.
+- Campos financeiros de `Vehicle` viram `FinancialEntry` com `sourceType=VEHICLE_CORE_COST` apenas quando ainda nao existem despesas antigas equivalentes.
+- `Sale` vira `FinancialEntry` de entrada com `sourceType=SALE` e cria/atualiza `Receivable`.
+- `CashFlow` vira `FinancialEntry` com `sourceType=CASHFLOW_LEGACY`; registros sem veiculo ou com valor anomalamente alto ficam com `isAnomalous=true` e nao entram nos calculos principais.
+- Lancamentos novos manuais usam `sourceType=MANUAL`.
+
+As tabelas `Vehicle`, `Expense`, `Sale`, `CashFlow`, `ExpenseCategory` e `Supplier` continuam existindo para compatibilidade. Os totais gravados em `Vehicle` passam a ser resumo derivado, recalculado a partir do livro razao e dos registros antigos sincronizados.
+
+### Como testar o Financeiro
+
+1. Rode `npx prisma generate`.
+2. Rode `npx prisma migrate deploy` ou `npm run db:migrate` em desenvolvimento interativo.
+3. Rode `npm run finance:sync`.
+4. Abra `/finance` ou, por compatibilidade, `/expenses`.
+5. Confira se os gastos antigos aparecem em Movimentacoes e Contas a Pagar.
+6. Abra um veiculo existente em `/vehicles/[id]` e confira a secao "Financeiro do veiculo".
+7. Crie uma nova despesa por veiculo; ela deve continuar salvando em `Expense` e sincronizar `FinancialEntry`.
+8. Crie uma nova entrada/saida manual; ela deve nascer diretamente em `FinancialEntry`.
+9. Rode `npm run build`.
 
 ## Dados de demonstracao incluidos
 
@@ -368,3 +431,51 @@ Depois de subir localmente, o passo mais valioso e:
 3. rodar `npm run db:seed`
 4. abrir o fluxo do lote Copart
 5. validar importacao parcial, upload e recalculo de margem
+## Importação por link da Copart
+
+A sessão **Lotes / Veículos** permite colar um link da Copart Brasil, como:
+
+```text
+https://www.copart.com.br/lot/1107348
+```
+
+O backend extrai o número do lote e consulta os endpoints estruturados:
+
+```text
+https://www.copart.com.br/public/data/lotdetails/solr/{lotNumber}
+https://www.copart.com.br/public/data/lotdetails/solr/lotImages/{lotNumber}
+```
+
+O fluxo primeiro mostra uma prévia editável com dados do veículo, lance, venda, características, documentos e fotos. Só depois do clique em **Salvar veículo** os dados são persistidos no banco. Após salvar, o LanceCerto usa o snapshot interno, os campos do veículo e as fotos gravadas, sem depender do link continuar disponível.
+
+Campos principais mapeados: `ln` para código do lote, `mkn` marca, `lm` modelo, `versão` versão, `lcy` ano de fabricação, `my` ano modelo, `orr` FIPE, `la` quilometragem, `hk` chave, `stt` documento, `docType` código documental, `scn` comitente, `dtd` tipo de monta, `damageDesc` descrição de dano, `lt` condição, `yn` e `pyn` pátios, `aan` + `gr` lote/vaga, `ad` data de venda, `currBid` lance atual, `inc` incremento, `cuc` moeda, `trl` documentos, `scl` condições específicas e `tims` imagem principal.
+
+As fotos vêm do endpoint `lotImages`. A importação normaliza URLs iniciadas com `//`, ordena por `sequenceNumber`, salva em `VehiclePhoto` com `source = copart`, usa a primeira imagem como principal e evita duplicar URLs já salvas para o mesmo veículo. Se a galeria falhar, o lote ainda pode ser salvo usando `tims` como imagem principal.
+
+### ScrapingBee opcional
+
+Se a Copart bloquear a chamada direta, o backend tenta os mesmos endpoints via ScrapingBee quando `SCRAPINGBEE_API_KEY` estiver configurada:
+
+```env
+SCRAPINGBEE_API_KEY=""
+SCRAPINGBEE_RENDER_JS="true"
+SCRAPINGBEE_WAIT_MS="5000"
+SCRAPINGBEE_PREMIUM_PROXY="false"
+SCRAPINGBEE_COUNTRY_CODE="br"
+```
+
+A chave fica apenas no backend. O fallback não usa a página visual `/lot/{lotNumber}` como fonte principal.
+
+### Teste local e Vercel
+
+Localmente, rode as migrations, gere o Prisma Client e suba o app:
+
+```bash
+npx prisma migrate dev
+npx prisma generate
+npm run dev
+```
+
+Na Vercel, configure `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET` e, opcionalmente, as variáveis `SCRAPINGBEE_*`. Depois faça deploy e teste a importação em **Lotes / Veículos** com `https://www.copart.com.br/lot/1107348`.
+
+Limitações: a Copart pode bloquear requisições automatizadas; quando isso acontecer, use o preenchimento manual assistido ou configure ScrapingBee. Dados financeiros editados manualmente não devem ser sobrescritos sem escolher atualizar um veículo existente na prévia.

@@ -13,6 +13,7 @@ type VehicleCostFields = {
 type ExpenseWithCategory = {
   actualAmount?: number | Prisma.Decimal | null;
   predictedAmount?: number | Prisma.Decimal | null;
+  paymentStatus?: PaymentStatus | string | null;
   category?: {
     code?: ExpenseCategoryType | string | null;
   } | null;
@@ -70,6 +71,10 @@ const toDecimal = (value: number) => new Prisma.Decimal(Math.round(value * 100) 
 export function calculateExpenseTotals(expenses: ExpenseWithCategory[]) {
   return expenses.reduce(
     (totals, expense) => {
+      if (expense.paymentStatus === PaymentStatus.CANCELLED) {
+        return totals;
+      }
+
       const actual = toNumber(expense.actualAmount);
       const predicted = toNumber(expense.predictedAmount);
       const currentAmount = actual || predicted;
@@ -109,7 +114,10 @@ export async function syncVehicleCoreExpenses(prisma: PrismaClient, vehicleId: s
       where: {
         vehicleId,
         categoryId,
-        description: definition.description
+        description: definition.description,
+        paymentStatus: {
+          not: PaymentStatus.CANCELLED
+        }
       },
       orderBy: {
         createdAt: "asc"
@@ -143,20 +151,32 @@ export async function syncVehicleCoreExpenses(prisma: PrismaClient, vehicleId: s
 
       const duplicateIds = existing.slice(1).map((expense) => expense.id);
       if (duplicateIds.length > 0) {
-        await prisma.expense.deleteMany({
+        await prisma.expense.updateMany({
           where: {
             id: {
               in: duplicateIds
             }
+          },
+          data: {
+            predictedAmount: toDecimal(0),
+            actualAmount: toDecimal(0),
+            paymentStatus: PaymentStatus.CANCELLED,
+            note: "Registro duplicado preservado e cancelado pela sincronizacao segura de custos centrais."
           }
         });
       }
     } else if (existing.length > 0) {
-      await prisma.expense.deleteMany({
+      await prisma.expense.updateMany({
         where: {
           id: {
             in: existing.map((expense) => expense.id)
           }
+        },
+        data: {
+          predictedAmount: toDecimal(0),
+          actualAmount: toDecimal(0),
+          paymentStatus: PaymentStatus.CANCELLED,
+          note: "Registro preservado e cancelado porque o custo central atual esta zerado."
         }
       });
     }

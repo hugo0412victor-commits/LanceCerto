@@ -1,4 +1,4 @@
-import { Prisma, VehicleStatus } from "@prisma/client";
+import { FinancialEntryStatus, FinancialEntryType, Prisma, VehicleStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { calculateTurnoverDays } from "@/lib/calculations";
 import { getInitialInspectionSummary, parseInitialInspectionPayload } from "@/lib/inspection";
@@ -11,6 +11,11 @@ const toNumber = (value: Prisma.Decimal | number | string | null | undefined) =>
 
   return Number(value);
 };
+
+const payableStatuses: FinancialEntryStatus[] = [FinancialEntryStatus.PENDING, FinancialEntryStatus.PARTIAL, FinancialEntryStatus.OVERDUE];
+const settledOutStatuses: FinancialEntryStatus[] = [FinancialEntryStatus.PAID];
+const receivableStatuses: FinancialEntryStatus[] = [FinancialEntryStatus.PENDING, FinancialEntryStatus.PARTIAL, FinancialEntryStatus.OVERDUE];
+const settledInStatuses: FinancialEntryStatus[] = [FinancialEntryStatus.RECEIVED];
 
 type RawVehicleDocumentRow = {
   id: string;
@@ -244,7 +249,12 @@ export async function getVehiclesList() {
     include: {
       auctionHouse: true,
       opportunityScore: true,
-      sale: true
+      sale: true,
+      financialSummary: true,
+      photos: {
+        orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }],
+        take: 1
+      }
     },
     orderBy: {
       updatedAt: "desc"
@@ -308,6 +318,19 @@ export async function getVehicleDetail(id: string) {
         }
       },
       sale: true,
+      financialSummary: true,
+      financialEntries: {
+        include: {
+          category: true,
+          subcategory: true,
+          payable: true,
+          receivable: true,
+          supplier: true
+        },
+        orderBy: {
+          createdAt: "desc"
+        }
+      },
       cashFlows: {
         orderBy: {
           createdAt: "desc"
@@ -352,6 +375,250 @@ export async function getExpensesOverview() {
   ]);
 
   return { expenses, vehicles, suppliers, categories };
+}
+
+export async function getFinancialOverview() {
+  const [
+    entries,
+    categories,
+    vehicles,
+    suppliers,
+    payables,
+    receivables,
+    summaries,
+    legacyCounts
+  ] = await Promise.all([
+    prisma.financialEntry.findMany({
+      include: {
+        category: true,
+        subcategory: true,
+        vehicle: {
+          select: {
+            id: true,
+            stockCode: true,
+            brand: true,
+            model: true,
+            version: true,
+            status: true,
+            auctionHouse: true
+          }
+        },
+        supplier: true,
+        payable: true,
+        receivable: true
+      },
+      orderBy: {
+        createdAt: "desc"
+      },
+      take: 250
+    }),
+    prisma.financialCategory.findMany({
+      include: {
+        subcategories: {
+          orderBy: {
+            name: "asc"
+          }
+        }
+      },
+      orderBy: [{ scope: "asc" }, { name: "asc" }]
+    }),
+    prisma.vehicle.findMany({
+      include: {
+        auctionHouse: true,
+        sale: true,
+        financialSummary: true
+      },
+      orderBy: {
+        updatedAt: "desc"
+      }
+    }),
+    prisma.supplier.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
+    prisma.payable.findMany({
+      include: {
+        transaction: {
+          include: {
+            category: true,
+            vehicle: true,
+            supplier: true
+          }
+        },
+        vehicle: true,
+        supplier: true
+      },
+      orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+      take: 80
+    }),
+    prisma.receivable.findMany({
+      include: {
+        transaction: {
+          include: {
+            category: true,
+            vehicle: true
+          }
+        },
+        vehicle: true,
+        sale: true
+      },
+      orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+      take: 80
+    }),
+    prisma.vehicleFinancialSummary.findMany({
+      include: {
+        vehicle: {
+          include: {
+            auctionHouse: true,
+            sale: true
+          }
+        }
+      },
+      orderBy: {
+        netProfit: "desc"
+      }
+    }),
+    Promise.all([
+      prisma.expense.count(),
+      prisma.sale.count(),
+      prisma.cashFlow.count(),
+      prisma.financialEntry.count()
+    ])
+  ]);
+
+  const [legacyExpensesCount, legacySalesCount, legacyCashFlowsCount, financialEntriesCount] = legacyCounts;
+  const calculationEntries = entries.filter((entry) => !entry.isAnomalous && entry.status !== FinancialEntryStatus.CANCELLED);
+  const outEntries = calculationEntries.filter((entry) => entry.type === FinancialEntryType.OUT);
+  const inEntries = calculationEntries.filter((entry) => entry.type === FinancialEntryType.IN);
+
+  const paidOut = outEntries
+    .filter((entry) => settledOutStatuses.includes(entry.status))
+    .reduce((total, entry) => total + toNumber(entry.paidAmount ?? entry.amount), 0);
+  const receivedIn = inEntries
+    .filter((entry) => settledInStatuses.includes(entry.status))
+    .reduce((total, entry) => total + toNumber(entry.paidAmount ?? entry.amount), 0);
+  const projectedOut = outEntries.reduce((total, entry) => total + toNumber(entry.amount), 0);
+  const projectedIn = inEntries.reduce((total, entry) => total + toNumber(entry.amount), 0);
+  const accountsPayable = outEntries
+    .filter((entry) => payableStatuses.includes(entry.status))
+    .reduce((total, entry) => total + Math.max(toNumber(entry.amount) - toNumber(entry.paidAmount), 0), 0);
+  const accountsReceivable = inEntries
+    .filter((entry) => receivableStatuses.includes(entry.status))
+    .reduce((total, entry) => total + Math.max(toNumber(entry.amount) - toNumber(entry.paidAmount), 0), 0);
+
+  const totalInvestedInStock = summaries.reduce((total, summary) => total + toNumber(summary.totalCost), 0);
+  const analysisCapital = summaries
+    .filter((summary) => summary.vehicle.status === VehicleStatus.ANALISE_LOTE)
+    .reduce((total, summary) => total + toNumber(summary.totalCost), 0);
+  const preparationStatuses: VehicleStatus[] = [
+    VehicleStatus.ARREMATADO,
+    VehicleStatus.AGUARDANDO_PAGAMENTO,
+    VehicleStatus.PAGO,
+    VehicleStatus.AGUARDANDO_RETIRADA,
+    VehicleStatus.RETIRADO,
+    VehicleStatus.VISTORIA_INICIAL,
+    VehicleStatus.ORCAMENTO_REPAROS,
+    VehicleStatus.MECANICA,
+    VehicleStatus.FUNILARIA,
+    VehicleStatus.PINTURA,
+    VehicleStatus.ESTETICA,
+    VehicleStatus.DOCUMENTACAO
+  ];
+  const preparationCapital = summaries
+    .filter((summary) => preparationStatuses.includes(summary.vehicle.status))
+    .reduce((total, summary) => total + toNumber(summary.totalCost), 0);
+  const grossProfit = summaries.reduce((total, summary) => total + toNumber(summary.grossProfit), 0);
+  const netProfit = summaries.reduce((total, summary) => total + toNumber(summary.netProfit), 0);
+  const marginAverage = summaries.length > 0 ? summaries.reduce((total, summary) => total + toNumber(summary.marginPercent), 0) / summaries.length : 0;
+  const roiAverage = summaries.length > 0 ? summaries.reduce((total, summary) => total + toNumber(summary.roiPercent), 0) / summaries.length : 0;
+
+  const expensesByCategory = Object.values(
+    outEntries.reduce<Record<string, { name: string; value: number }>>((accumulator, entry) => {
+      const name = entry.category?.name ?? "Sem categoria";
+      accumulator[name] ??= {
+        name,
+        value: 0
+      };
+      accumulator[name].value += toNumber(entry.amount);
+      return accumulator;
+    }, {})
+  ).sort((first, second) => second.value - first.value);
+
+  const entriesByMonth = Object.values(
+    calculationEntries.reduce<Record<string, { month: string; entradas: number; saidas: number }>>((accumulator, entry) => {
+      const date = entry.competenceDate ?? entry.dueDate ?? entry.createdAt;
+      const month = date.toISOString().slice(0, 7);
+      accumulator[month] ??= {
+        month,
+        entradas: 0,
+        saidas: 0
+      };
+      if (entry.type === FinancialEntryType.IN) {
+        accumulator[month].entradas += toNumber(entry.amount);
+      } else if (entry.type === FinancialEntryType.OUT) {
+        accumulator[month].saidas += toNumber(entry.amount);
+      }
+      return accumulator;
+    }, {})
+  ).sort((first, second) => first.month.localeCompare(second.month));
+
+  const profitByVehicle = summaries.map((summary) => ({
+    vehicle: summary.vehicle.stockCode ?? `${summary.vehicle.brand ?? ""} ${summary.vehicle.model ?? ""}`.trim(),
+    bruto: toNumber(summary.grossProfit),
+    liquido: toNumber(summary.netProfit),
+    margem: toNumber(summary.marginPercent),
+    roi: toNumber(summary.roiPercent)
+  }));
+
+  const investmentByStatus = Object.values(
+    summaries.reduce<Record<string, { status: string; value: number }>>((accumulator, summary) => {
+      accumulator[summary.vehicle.status] ??= {
+        status: summary.vehicle.status,
+        value: 0
+      };
+      accumulator[summary.vehicle.status].value += toNumber(summary.totalCost);
+      return accumulator;
+    }, {})
+  );
+
+  return {
+    entries,
+    categories,
+    vehicles,
+    suppliers,
+    payables,
+    receivables,
+    summaries,
+    legacyStatus: {
+      legacyExpensesCount,
+      legacySalesCount,
+      legacyCashFlowsCount,
+      financialEntriesCount,
+      needsSync: legacyExpensesCount + legacySalesCount + legacyCashFlowsCount > 0 && financialEntriesCount === 0
+    },
+    metrics: {
+      cashBalance: receivedIn - paidOut,
+      periodIn: projectedIn,
+      periodOut: projectedOut,
+      accountsPayable,
+      accountsReceivable,
+      totalInvestedInStock,
+      analysisCapital,
+      preparationCapital,
+      grossProfit,
+      netProfit,
+      marginAverage,
+      roiAverage
+    },
+    charts: {
+      expensesByCategory,
+      entriesByMonth,
+      profitByVehicle,
+      investmentByStatus
+    },
+    recentEntries: entries.slice(0, 12),
+    anomalousLegacyEntries: entries.filter((entry) => entry.isAnomalous),
+    topProfitVehicles: summaries.slice().sort((first, second) => toNumber(second.netProfit) - toNumber(first.netProfit)).slice(0, 8),
+    highCostVehicles: summaries.slice().sort((first, second) => toNumber(second.totalCost) - toNumber(first.totalCost)).slice(0, 8),
+    negativeMarginVehicles: summaries.filter((summary) => toNumber(summary.marginPercent) < 0)
+  };
 }
 
 export async function getProcessOverview() {

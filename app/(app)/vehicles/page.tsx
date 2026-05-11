@@ -55,22 +55,29 @@ export default async function VehiclesPage() {
                 <tr key={vehicle.id} className="border-b border-border/60 transition hover:bg-background/50">
                   <td className="px-4 py-4 font-semibold text-primary">{vehicle.stockCode ?? "Sem código"}</td>
                   <td className="px-4 py-4">
-                    <div>
-                      <p className="font-medium text-foreground">
-                        {[vehicle.brand, vehicle.model, vehicle.version].filter(Boolean).join(" ")}
-                      </p>
-                      <p className="text-xs text-muted">
-                        Lote {vehicle.lotCode ?? "pendente"} • Completo {vehicle.completenessPercent}%
-                      </p>
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={vehicle.photos[0]?.publicUrl ?? vehicle.mainPhotoUrl ?? "/placeholders/vehicle-1.svg"}
+                        alt="Foto do veículo"
+                        className="h-12 w-16 rounded-xl border border-border object-cover"
+                      />
+                      <div>
+                        <p className="font-medium text-foreground">
+                          {vehicle.displayName ?? [vehicle.brand, vehicle.model, vehicle.version].filter(Boolean).join(" ")}
+                        </p>
+                        <p className="text-xs text-muted">
+                          Lote {vehicle.lotCode ?? "pendente"} • Completo {vehicle.completenessPercent}%
+                        </p>
+                      </div>
                     </div>
                   </td>
                   <td className="px-4 py-4">{vehicle.auctionHouse?.name ?? "Não informada"}</td>
                   <td className="px-4 py-4">
                     <VehicleStatusBadge status={vehicle.status as never} />
                   </td>
-                  <td className="px-4 py-4 font-semibold">{formatCurrency(Number(vehicle.totalActualCost ?? vehicle.totalPredictedCost ?? 0))}</td>
+                  <td className="px-4 py-4 font-semibold">{formatCurrency(Number(vehicle.financialSummary?.totalCost ?? vehicle.totalActualCost ?? vehicle.totalPredictedCost ?? 0))}</td>
                   <td className="px-4 py-4 font-semibold">{formatCurrency(Number(vehicle.predictedSalePrice ?? 0))}</td>
-                  <td className="px-4 py-4 font-semibold text-primary">{formatCurrency(Number(vehicle.predictedProfit ?? 0))}</td>
+                  <td className="px-4 py-4 font-semibold text-primary">{formatCurrency(Number(vehicle.financialSummary?.netProfit ?? vehicle.predictedProfit ?? 0))}</td>
                   <td className="px-4 py-4">
                     <Link href={`/vehicles/${vehicle.id}`} className="inline-flex items-center gap-2 font-semibold text-primary">
                       Abrir veículo

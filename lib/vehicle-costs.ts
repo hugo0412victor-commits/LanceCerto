@@ -69,10 +69,20 @@ const toNumber = (value?: number | Prisma.Decimal | null) => {
 const toDecimal = (value: number) => new Prisma.Decimal(Math.round(value * 100) / 100);
 
 export function calculateExpenseTotals(expenses: ExpenseWithCategory[]) {
+  let auctionBidAlreadyCounted = false;
+
   return expenses.reduce(
     (totals, expense) => {
       if (expense.paymentStatus === PaymentStatus.CANCELLED) {
         return totals;
+      }
+
+      if (expense.category?.code === ExpenseCategoryType.ARREMATE) {
+        if (auctionBidAlreadyCounted) {
+          return totals;
+        }
+
+        auctionBidAlreadyCounted = true;
       }
 
       const actual = toNumber(expense.actualAmount);
@@ -107,6 +117,22 @@ export async function syncVehicleCoreExpenses(prisma: PrismaClient, vehicleId: s
     const categoryId = categoryMap.get(definition.categoryCode);
 
     if (!categoryId) {
+      continue;
+    }
+
+    const manuallyDeletedCoreExpense = await prisma.expense.findFirst({
+      where: {
+        vehicleId,
+        categoryId,
+        description: definition.description,
+        paymentStatus: PaymentStatus.CANCELLED,
+        note: {
+          contains: "Excluida manualmente"
+        }
+      }
+    });
+
+    if (manuallyDeletedCoreExpense) {
       continue;
     }
 
@@ -148,29 +174,10 @@ export async function syncVehicleCoreExpenses(prisma: PrismaClient, vehicleId: s
           data
         });
       }
-
-      const duplicateIds = existing.slice(1).map((expense) => expense.id);
-      if (duplicateIds.length > 0) {
-        await prisma.expense.updateMany({
-          where: {
-            id: {
-              in: duplicateIds
-            }
-          },
-          data: {
-            predictedAmount: toDecimal(0),
-            actualAmount: toDecimal(0),
-            paymentStatus: PaymentStatus.CANCELLED,
-            note: "Registro duplicado preservado e cancelado pela sincronizacao segura de custos centrais."
-          }
-        });
-      }
     } else if (existing.length > 0) {
-      await prisma.expense.updateMany({
+      await prisma.expense.update({
         where: {
-          id: {
-            in: existing.map((expense) => expense.id)
-          }
+          id: existing[0].id
         },
         data: {
           predictedAmount: toDecimal(0),

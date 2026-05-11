@@ -348,6 +348,7 @@ export async function saveExpenseAction(formData: FormData) {
 
   await recalculateVehicleCostsFromExpenses(prisma, vehicleId);
   await syncFinancialLedgerFromLegacy(prisma);
+  await refreshVehicleFinancialSummary(prisma, vehicleId);
 
   await createAuditLog({
     userId: session?.user.id,
@@ -360,6 +361,139 @@ export async function saveExpenseAction(formData: FormData) {
 
   revalidatePath("/expenses");
   revalidatePath("/finance");
+  revalidatePath("/financial");
+  revalidatePath("/financial/vehicle-expenses");
+  revalidatePath(`/vehicles/${vehicleId}`);
+}
+
+export async function markExpensePaidAction(formData: FormData) {
+  const session = await getServerAuthSession();
+  assertCanWrite(session?.user.role);
+
+  const expenseId = String(formData.get("expenseId") ?? "").trim();
+  const vehicleId = String(formData.get("vehicleId") ?? "").trim();
+
+  const expense = await prisma.expense.findFirst({
+    where: {
+      id: expenseId,
+      vehicleId
+    }
+  });
+
+  if (!expense) {
+    throw new Error("Despesa nao encontrada para este veiculo.");
+  }
+
+  const amount = expense.actualAmount ?? expense.predictedAmount;
+  const updatedExpense = await prisma.expense.update({
+    where: {
+      id: expense.id
+    },
+    data: {
+      paymentStatus: PaymentStatus.PAID,
+      actualAmount: amount,
+      date: expense.date ?? new Date()
+    }
+  });
+
+  await prisma.financialEntry.updateMany({
+    where: {
+      sourceType: "EXPENSE",
+      sourceId: expense.id,
+      vehicleId
+    },
+    data: {
+      status: FinancialEntryStatus.PAID,
+      paidAmount: updatedExpense.actualAmount ?? updatedExpense.predictedAmount ?? new Prisma.Decimal(0),
+      paidAt: updatedExpense.date ?? new Date()
+    }
+  });
+
+  await recalculateVehicleCostsFromExpenses(prisma, vehicleId);
+  await refreshVehicleFinancialSummary(prisma, vehicleId);
+
+  await createAuditLog({
+    userId: session?.user.id,
+    entityType: "Expense",
+    entityId: expense.id,
+    action: "MARK_PAID",
+    beforeData: expense,
+    afterData: updatedExpense,
+    message: "Despesa marcada como paga"
+  });
+
+  revalidatePath("/expenses");
+  revalidatePath("/finance");
+  revalidatePath("/financial");
+  revalidatePath("/financial/vehicle-expenses");
+  revalidatePath(`/vehicles/${vehicleId}`);
+}
+
+export async function deleteVehicleExpenseAction(formData: FormData) {
+  const session = await getServerAuthSession();
+  assertCanDelete(session?.user.role);
+
+  const expenseId = String(formData.get("expenseId") ?? "").trim();
+  const vehicleId = String(formData.get("vehicleId") ?? "").trim();
+
+  const expense = await prisma.expense.findFirst({
+    where: {
+      id: expenseId,
+      vehicleId
+    },
+    include: {
+      category: true,
+      supplier: true
+    }
+  });
+
+  if (!expense) {
+    throw new Error("Despesa nao encontrada para este veiculo.");
+  }
+
+  const cancelledExpense = await prisma.expense.update({
+    where: {
+      id: expense.id
+    },
+    data: {
+      paymentStatus: PaymentStatus.CANCELLED,
+      predictedAmount: new Prisma.Decimal(0),
+      actualAmount: new Prisma.Decimal(0),
+      note: [expense.note, `Excluida manualmente em ${new Date().toISOString()}.`].filter(Boolean).join(" ")
+    }
+  });
+
+  await prisma.financialEntry.updateMany({
+    where: {
+      sourceType: "EXPENSE",
+      sourceId: expense.id,
+      vehicleId
+    },
+    data: {
+      amount: new Prisma.Decimal(0),
+      paidAmount: new Prisma.Decimal(0),
+      status: FinancialEntryStatus.CANCELLED,
+      notes: "Despesa excluida/cancelada manualmente na tela de despesas por veiculo."
+    }
+  });
+
+  await recalculateVehicleCostsFromExpenses(prisma, vehicleId);
+  await refreshVehicleFinancialSummary(prisma, vehicleId);
+
+  await createAuditLog({
+    userId: session?.user.id,
+    entityType: "Expense",
+    entityId: expense.id,
+    action: "DELETE",
+    beforeData: expense,
+    afterData: cancelledExpense,
+    message: `Despesa excluida do veiculo ${vehicleId}`
+  });
+
+  revalidatePath("/expenses");
+  revalidatePath("/finance");
+  revalidatePath("/financial");
+  revalidatePath("/financial/vehicle-expenses");
   revalidatePath(`/vehicles/${vehicleId}`);
 }
 

@@ -245,21 +245,23 @@ export async function syncFinancialLedgerFromLegacy(prisma: LedgerPrisma) {
     const actual = toNumber(expense.actualAmount);
     const predicted = toNumber(expense.predictedAmount);
     const amount = actual || predicted;
+    if (expense.paymentStatus === PaymentStatus.CANCELLED) {
+      await prisma.financialEntry.updateMany({
+        where: {
+          sourceType: FinancialEntrySourceType.EXPENSE,
+          sourceId: expense.id
+        },
+        data: {
+          amount: toDecimal(0),
+          paidAmount: toDecimal(0),
+          status: FinancialEntryStatus.CANCELLED,
+          notes: expense.note ?? "Despesa original preservada e cancelada."
+        }
+      });
+      continue;
+    }
+
     if (amount <= 0) {
-      if (expense.paymentStatus === PaymentStatus.CANCELLED) {
-        await prisma.financialEntry.updateMany({
-          where: {
-            sourceType: FinancialEntrySourceType.EXPENSE,
-            sourceId: expense.id
-          },
-          data: {
-            amount: toDecimal(0),
-            paidAmount: toDecimal(0),
-            status: FinancialEntryStatus.CANCELLED,
-            notes: expense.note ?? "Despesa original preservada e cancelada."
-          }
-        });
-      }
       continue;
     }
 

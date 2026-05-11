@@ -2,38 +2,80 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
-import { CarFront, ChartColumn, ClipboardList, FileText, HandCoins, LayoutDashboard, Menu, Megaphone, NotebookTabs, Settings2, ShoppingCart, Users, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  CarFront,
+  ChartColumn,
+  ChevronDown,
+  ChevronUp,
+  ClipboardList,
+  FileText,
+  HandCoins,
+  LayoutDashboard,
+  Menu,
+  Megaphone,
+  NotebookTabs,
+  Settings2,
+  ShoppingCart,
+  Users,
+  X
+} from "lucide-react";
 import { LanceCertoLogo } from "@/components/brand/lancecerto-logo";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 const items = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/vehicles", label: "Lotes / Veículos", icon: CarFront },
-  { href: "/simulator", label: "Simulador", icon: ShoppingCart },
+  { href: "/vehicles", label: "Lotes / Veiculos", icon: CarFront },
+  { href: "/simulator", label: "Simulador", icon: ShoppingCart }
+];
+
+const secondaryItems = [
   { href: "/market-research", label: "Pesquisa de mercado", icon: ChartColumn },
-  { href: "/finance", label: "Financeiro", icon: HandCoins },
   { href: "/processes", label: "Processos", icon: ClipboardList },
   { href: "/documents", label: "Documentos", icon: FileText },
   { href: "/sales", label: "Vendas", icon: Megaphone },
   { href: "/suppliers", label: "Fornecedores", icon: Users },
-  { href: "/reports", label: "Relatórios", icon: NotebookTabs },
-  { href: "/settings", label: "Configurações", icon: Settings2 }
+  { href: "/reports", label: "Relatorios", icon: NotebookTabs },
+  { href: "/settings", label: "Configuracoes", icon: Settings2 }
+];
+
+const financialItems = [
+  { href: "/financial", label: "Dashboard Financeiro" },
+  { href: "/financial/movements", label: "Movimentacoes" },
+  { href: "/financial/cash", label: "Caixa" },
+  { href: "/financial/payables", label: "Contas a Pagar" },
+  { href: "/financial/receivables", label: "Contas a Receber" },
+  { href: "/financial/vehicle-expenses", label: "Despesas por Veiculo" },
+  { href: "/financial/operational-expenses", label: "Despesas Operacionais" },
+  { href: "/financial/cost-centers", label: "Centros de Custo" },
+  { href: "/financial/profitability", label: "Margem e Lucratividade" },
+  { href: "/financial/sales-receipts", label: "Vendas e Recebimentos" },
+  { href: "/financial/commissions", label: "Comissoes e Parceiros" },
+  { href: "/financial/reports", label: "Relatorios Financeiros" },
+  { href: "/financial/settings", label: "Configuracoes Financeiras" }
 ];
 
 export function Sidebar({ systemName }: { systemName: string }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const isFinancialRoute = pathname === "/finance" || pathname === "/financial" || pathname?.startsWith("/financial/");
+  const [financialOpen, setFinancialOpen] = useState(isFinancialRoute);
+
+  useEffect(() => {
+    if (isFinancialRoute) {
+      setFinancialOpen(true);
+    }
+  }, [isFinancialRoute]);
 
   const content = (
     <>
       <div className="rounded-[2rem] border border-primary/10 bg-brand-mesh p-5 shadow-panel">
         <LanceCertoLogo showTagline />
         <div className="mt-5 rounded-[1.4rem] border border-primary/10 bg-white/80 p-4 shadow-sm">
-          <p className="text-xs uppercase tracking-[0.26em] text-accent">Operação ativa</p>
+          <p className="text-xs uppercase tracking-[0.26em] text-accent">Operacao ativa</p>
           <p className="mt-2 text-sm leading-6 text-foreground/78">
-            Gestão completa de leilões, lotes, vendas, documentos e retorno previsto em um só fluxo.
+            Gestao completa de leiloes, lotes, vendas, documentos e retorno previsto em um so fluxo.
           </p>
           <div className="mt-4 flex items-center gap-2">
             <Badge tone="warning">SaaS Premium</Badge>
@@ -73,12 +115,96 @@ export function Sidebar({ systemName }: { systemName: string }) {
             </Link>
           );
         })}
+
+        <div>
+          <button
+            type="button"
+            onClick={() => setFinancialOpen((current) => !current)}
+            className={cn(
+              "group flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left text-sm transition duration-200",
+              isFinancialRoute
+                ? "bg-gradient-to-r from-[#0D7A74] via-[#438967] to-[#F2B22B] text-white shadow-glow"
+                : "text-foreground/78 hover:bg-primary/6 hover:text-primary"
+            )}
+            aria-expanded={financialOpen}
+          >
+            <span
+              className={cn(
+                "flex h-10 w-10 items-center justify-center rounded-xl border transition",
+                isFinancialRoute
+                  ? "border-white/20 bg-white/12"
+                  : "border-primary/10 bg-white shadow-sm group-hover:border-primary/18 group-hover:bg-primary/5"
+              )}
+            >
+              <HandCoins className="h-4 w-4" />
+            </span>
+            <span className="min-w-0 flex-1 font-semibold">Financeiro</span>
+            {financialOpen ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
+          </button>
+
+          <div className={cn("grid transition-all duration-300", financialOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}>
+            <div className="overflow-hidden">
+              <div className="ml-6 mt-2 grid gap-1 border-l border-primary/10 pl-4">
+                {financialItems.map((item) => {
+                  const active = pathname === item.href;
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setOpen(false)}
+                      className={cn(
+                        "rounded-xl px-3 py-2 text-xs font-semibold leading-5 transition",
+                        active
+                          ? "bg-primary/10 text-primary"
+                          : "text-foreground/68 hover:bg-primary/6 hover:text-primary"
+                      )}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {secondaryItems.map((item) => {
+          const Icon = item.icon;
+          const active = pathname === item.href || pathname?.startsWith(`${item.href}/`);
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={() => setOpen(false)}
+              className={cn(
+                "group flex items-center gap-3 rounded-2xl px-4 py-3.5 text-sm transition duration-200",
+                active
+                  ? "bg-gradient-to-r from-[#0D7A74] via-[#438967] to-[#F2B22B] text-white shadow-glow"
+                  : "text-foreground/78 hover:bg-primary/6 hover:text-primary"
+              )}
+            >
+              <span
+                className={cn(
+                  "flex h-10 w-10 items-center justify-center rounded-xl border transition",
+                  active
+                    ? "border-white/20 bg-white/12"
+                    : "border-primary/10 bg-white shadow-sm group-hover:border-primary/18 group-hover:bg-primary/5"
+                )}
+              >
+                <Icon className="h-4 w-4" />
+              </span>
+              <span className="font-semibold">{item.label}</span>
+            </Link>
+          );
+        })}
       </nav>
 
       <div className="rounded-[1.8rem] border border-accent/20 bg-accent/8 p-5 text-sm text-foreground/82">
         <p className="text-xs uppercase tracking-[0.28em] text-accent">Diretriz operacional</p>
         <p className="mt-3 leading-6">
-          Nenhum fluxo deve parar por falta de informação. Salve parcial, marque pendências e avance a operação.
+          Nenhum fluxo deve parar por falta de informacao. Salve parcial, marque pendencias e avance a operacao.
         </p>
       </div>
     </>

@@ -1,1 +1,5 @@
-export { default } from "../expenses/page";
+import { redirect } from "next/navigation";
+
+export default function FinancePage() {
+  redirect("/financial");
+}

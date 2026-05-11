@@ -198,7 +198,7 @@ export default async function VehicleDetailPage({
 
   const areaLinks = [
     {
-      href: "/expenses",
+      href: `/financial/vehicle-expenses?vehicleId=${vehicle.id}`,
       title: "Financeiro",
       description: "Lançamentos, histórico de gastos e custos detalhados."
     },

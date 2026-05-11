@@ -12,6 +12,20 @@ type CopartPayload = {
     images?: unknown;
   };
 };
+type CopartJsonLogPrefix = "copart_structured" | "copart_lot_images" | "scrapingbee_structured" | "scrapingbee_images";
+
+type CopartDetailsFetchResult = {
+  endpoint: string;
+  details: CopartLotDetails;
+  usedScrapingBee: boolean;
+};
+
+type CopartImagesFetchResult = {
+  images: ImportedLotPhoto[];
+  endpoint: string;
+  usedScrapingBee: boolean;
+  alert?: string;
+};
 
 const COPART_BASE_URL = "https://www.copart.com.br";
 const BLOCK_PATTERNS = [/_incapsula_resource/i, /noindex,nofollow/i, /access denied/i, /captcha/i, /forbidden/i];
@@ -121,19 +135,21 @@ function normalizeImageUrl(value?: string) {
     return undefined;
   }
 
-  if (value.startsWith("//")) {
-    return `https:${value}`;
+  const trimmed = value.trim();
+
+  if (trimmed.startsWith("//")) {
+    return `https:${trimmed}`;
   }
 
-  if (value.startsWith("/")) {
-    return new URL(value, COPART_BASE_URL).toString();
+  if (trimmed.startsWith("/")) {
+    return new URL(trimmed, COPART_BASE_URL).toString();
   }
 
-  return value;
+  return trimmed;
 }
 
 function displayName(details: CopartLotDetails) {
-  return [asString(details.mkn), asString(details.lm), asString(details["versão"]) ?? asString(details.version), asText(details.my)]
+  return [asString(details.mkn), asString(details.lm), asString(details["versão"]) ?? asString(details["versÃ£o"]) ?? asString(details.version), asText(details.my)]
     .filter(Boolean)
     .join(" ");
 }
@@ -144,6 +160,25 @@ function titleFromDetails(details: CopartLotDetails) {
 
 function buildYardSlot(details: CopartLotDetails) {
   return [asText(details.aan), asText(details.gr)].filter(Boolean).join(" / ") || undefined;
+}
+
+function resolveFipeAndMileage(details: CopartLotDetails) {
+  const fipeFromOrr = asNumber(details.orr);
+  const laValue = asNumber(details.la);
+
+  if (fipeFromOrr && fipeFromOrr > 0) {
+    return {
+      fipeValue: fipeFromOrr,
+      mileage: parseInteger(details.la),
+      mileageUnit: asString(details.ord)
+    };
+  }
+
+  return {
+    fipeValue: laValue,
+    mileage: undefined,
+    mileageUnit: undefined
+  };
 }
 
 function extractLotNumber(url: string) {
@@ -176,25 +211,30 @@ function endpointFor(path: string, lotNumber: string) {
   return `${COPART_BASE_URL}/public/data/lotdetails/solr/${path}${lotNumber}`;
 }
 
+function hasScrapingBeeKey() {
+  return Boolean(process.env.SCRAPINGBEE_API_KEY?.trim());
+}
+
 function scrapingBeeUrl(targetUrl: string) {
-  const apiKey = process.env.SCRAPINGBEE_API_KEY;
+  const apiKey = process.env.SCRAPINGBEE_API_KEY?.trim();
 
   if (!apiKey) {
     return undefined;
   }
 
-  const url = new URL("https://app.scrapingbee.com/api/v1/");
-  url.searchParams.set("api_key", apiKey);
-  url.searchParams.set("url", targetUrl);
-  url.searchParams.set("render_js", process.env.SCRAPINGBEE_RENDER_JS ?? "true");
-  url.searchParams.set("wait", process.env.SCRAPINGBEE_WAIT_MS ?? "5000");
-  url.searchParams.set("premium_proxy", process.env.SCRAPINGBEE_PREMIUM_PROXY ?? "false");
+  const params = [
+    `api_key=${encodeURIComponent(apiKey)}`,
+    `url=${encodeURIComponent(targetUrl)}`,
+    `render_js=${encodeURIComponent(process.env.SCRAPINGBEE_RENDER_JS ?? "true")}`,
+    `wait=${encodeURIComponent(process.env.SCRAPINGBEE_WAIT_MS ?? "5000")}`,
+    `premium_proxy=${encodeURIComponent(process.env.SCRAPINGBEE_PREMIUM_PROXY ?? "false")}`
+  ];
 
-  if (process.env.SCRAPINGBEE_COUNTRY_CODE) {
-    url.searchParams.set("country_code", process.env.SCRAPINGBEE_COUNTRY_CODE);
+  if (process.env.SCRAPINGBEE_COUNTRY_CODE?.trim()) {
+    params.push(`country_code=${encodeURIComponent(process.env.SCRAPINGBEE_COUNTRY_CODE.trim())}`);
   }
 
-  return url.toString();
+  return `https://app.scrapingbee.com/api/v1/?${params.join("&")}`;
 }
 
 function validateBody(body: string, contentType?: string | null) {
@@ -211,7 +251,19 @@ function validateBody(body: string, contentType?: string | null) {
   }
 }
 
-async function fetchJson(endpoint: string, referer: string, logPrefix: "copart_structured" | "copart_lot_images" | "scrapingbee_structured") {
+async function fetchJson(endpoint: string, referer: string, logPrefix: CopartJsonLogPrefix) {
+  if (logPrefix === "copart_structured") {
+    logCopart("copart_direct_started", { endpoint });
+  }
+
+  if (logPrefix === "scrapingbee_structured") {
+    logCopart("scrapingbee_structured_started");
+  }
+
+  if (logPrefix === "scrapingbee_images") {
+    logCopart("scrapingbee_images_started");
+  }
+
   logCopart(`${logPrefix}_endpoint_started`, {
     endpoint: endpoint.replace(/api_key=[^&]+/i, "api_key=[redacted]")
   });
@@ -239,6 +291,16 @@ async function fetchJson(endpoint: string, referer: string, logPrefix: "copart_s
   logCopart(`${logPrefix}_content_type`, { contentType });
   logCopart(`${logPrefix}_body_length`, { bodyLength: body.length });
 
+  if (logPrefix === "scrapingbee_structured") {
+    logCopart("scrapingbee_structured_status", { status: response.status });
+    logCopart("scrapingbee_structured_body_length", { bodyLength: body.length });
+  }
+
+  if (logPrefix === "scrapingbee_images") {
+    logCopart("scrapingbee_images_status", { status: response.status });
+    logCopart("scrapingbee_images_body_length", { bodyLength: body.length });
+  }
+
   validateBody(body, contentType);
 
   if (!response.ok) {
@@ -261,7 +323,9 @@ async function fetchJson(endpoint: string, referer: string, logPrefix: "copart_s
   }
 }
 
-async function fetchWithScrapingBee(endpoint: string, referer: string) {
+async function fetchWithScrapingBee(endpoint: string, referer: string, kind: "structured" | "images") {
+  logCopart("scrapingbee_key_present", { present: hasScrapingBeeKey() });
+
   const fallbackUrl = scrapingBeeUrl(endpoint);
 
   if (!fallbackUrl) {
@@ -269,11 +333,10 @@ async function fetchWithScrapingBee(endpoint: string, referer: string) {
   }
 
   try {
-    const payload = await fetchJson(fallbackUrl, referer, "scrapingbee_structured");
-    logCopart("scrapingbee_structured_parse_success");
+    const payload = await fetchJson(fallbackUrl, referer, kind === "structured" ? "scrapingbee_structured" : "scrapingbee_images");
     return payload;
   } catch (error) {
-    logCopart("scrapingbee_structured_parse_failed", {
+    logCopart(kind === "structured" ? "scrapingbee_structured_parse_failed" : "scrapingbee_images_parse_failed", {
       code: error instanceof LotImportError ? error.code : "UNKNOWN_ERROR",
       message: error instanceof Error ? error.message : "unknown"
     });
@@ -303,6 +366,12 @@ function validateDetailsPayload(payload: CopartPayload, lotNumber: string) {
   return details;
 }
 
+function validateScrapingBeeDetailsPayload(payload: CopartPayload, lotNumber: string) {
+  const details = validateDetailsPayload(payload, lotNumber);
+  logCopart("scrapingbee_structured_parse_success", { lotNumber });
+  return details;
+}
+
 function pickImageField(record: Record<string, unknown>, names: string[]) {
   for (const name of names) {
     const value = normalizeImageUrl(asString(record[name]));
@@ -315,31 +384,103 @@ function pickImageField(record: Record<string, unknown>, names: string[]) {
   return undefined;
 }
 
-function imageFromRecord(record: Record<string, unknown>, fallbackIndex: number): ImportedLotPhoto | undefined {
-  const imageUrl = pickImageField(record, [
-    "fullImage",
-    "fullImageUrl",
-    "fullUrl",
-    "url",
-    "imageUrl",
-    "highResUrl",
-    "highResImageUrl",
-    "link",
-    "image"
-  ]);
-  const thumbnailUrl = pickImageField(record, ["thumbnailUrl", "thumbnail", "thumbUrl", "smallImage", "smallImageUrl"]);
-
-  if (!imageUrl && !thumbnailUrl) {
+function imageTypeFromUrl(url?: string) {
+  if (!url) {
     return undefined;
   }
 
+  try {
+    return new URL(url).searchParams.get("imageType") ?? undefined;
+  } catch {
+    return url.match(/[?&]imageType=([^&]+)/i)?.[1];
+  }
+}
+
+function imageBaseKey(url: string) {
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.delete("imageType");
+    parsed.searchParams.sort();
+    return parsed.toString().toLowerCase();
+  } catch {
+    return url.replace(/[?&]imageType=[^&]+/i, "").toLowerCase();
+  }
+}
+
+function removeImageTypeQuery(url: string) {
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.delete("imageType");
+    return parsed.toString();
+  } catch {
+    return url.replace(/([?&])imageType=[^&]+&?/i, "$1").replace(/[?&]$/, "");
+  }
+}
+
+function imageQualityRank(photo: ImportedLotPhoto) {
+  const type = (photo.imageType ?? imageTypeFromUrl(photo.imageUrl) ?? "").toLowerCase();
+
+  if (!type) return 100;
+  if (["highres", "high_res", "hires", "original"].includes(type)) return 95;
+  if (["large", "full", "fullscreen", "fullimage"].includes(type)) return 90;
+  if (type === "vga") return 20;
+  if (type === "thumbnail" || type === "thumb") return 10;
+  return 50;
+}
+
+function collectImageUrlCandidate(record: Record<string, unknown>, fieldName: string, fallbackIndex: number): ImportedLotPhoto | undefined {
+  let imageUrl = normalizeImageUrl(asString(record[fieldName]));
+
+  if (!imageUrl) {
+    return undefined;
+  }
+
+  const sequenceNumber =
+    parseInteger(record.sequenceNumber) ??
+    parseInteger(record.sequence) ??
+    parseInteger(record.seq) ??
+    parseInteger(record.position) ??
+    parseInteger(record.index) ??
+    fallbackIndex + 1;
+  const urlImageType = imageTypeFromUrl(imageUrl);
+  const explicitType = urlImageType ?? asString(record.imageTypeDescription) ?? asString(record.imageType) ?? asString(record.type) ?? asString(record.image_type);
+  const canUseBaseImage = Boolean(record.highRes) || /full|high|large/i.test(explicitType ?? "");
+  const thumbnailUrl = ["thumbnailUrl", "thumbnail", "thumbUrl", "smallImage", "smallImageUrl"].includes(fieldName) || /thumbnail|vga/i.test(urlImageType ?? "") ? imageUrl : undefined;
+
+  if (canUseBaseImage && /[?&]imageType=/i.test(imageUrl)) {
+    imageUrl = removeImageTypeQuery(imageUrl);
+  }
+
   return {
-    imageUrl: imageUrl ?? thumbnailUrl!,
+    imageUrl,
     thumbnailUrl,
-    imageType: asString(record.imageType) ?? asString(record.type) ?? asString(record.image_type),
-    sequenceNumber: parseInteger(record.sequenceNumber) ?? parseInteger(record.sequence) ?? parseInteger(record.seq) ?? fallbackIndex + 1,
+    imageType: explicitType ?? imageTypeFromUrl(imageUrl),
+    sequenceNumber,
     source: "copart"
   };
+}
+
+function imageCandidatesFromRecord(record: Record<string, unknown>, fallbackIndex: number) {
+  return [
+    "highResUrl",
+    "highResImageUrl",
+    "fullImage",
+    "fullImageUrl",
+    "fullUrl",
+    "largeImage",
+    "largeImageUrl",
+    "url",
+    "imageUrl",
+    "link",
+    "image",
+    "thumbnailUrl",
+    "thumbnail",
+    "thumbUrl",
+    "smallImage",
+    "smallImageUrl"
+  ]
+    .map((fieldName) => collectImageUrlCandidate(record, fieldName, fallbackIndex))
+    .filter((photo): photo is ImportedLotPhoto => Boolean(photo));
 }
 
 function collectImages(value: unknown, images: ImportedLotPhoto[] = []): ImportedLotPhoto[] {
@@ -349,7 +490,7 @@ function collectImages(value: unknown, images: ImportedLotPhoto[] = []): Importe
 
   if (typeof value === "string") {
     const imageUrl = normalizeImageUrl(value);
-    if (imageUrl && /\.(jpg|jpeg|png|webp)(\?|$)/i.test(imageUrl)) {
+    if (imageUrl) {
       images.push({
         imageUrl,
         sequenceNumber: images.length + 1,
@@ -366,11 +507,7 @@ function collectImages(value: unknown, images: ImportedLotPhoto[] = []): Importe
 
   if (typeof value === "object") {
     const record = value as Record<string, unknown>;
-    const image = imageFromRecord(record, images.length);
-
-    if (image) {
-      images.push(image);
-    }
+    images.push(...imageCandidatesFromRecord(record, images.length));
 
     Object.values(record).forEach((item) => {
       if (item && (Array.isArray(item) || typeof item === "object")) {
@@ -382,32 +519,70 @@ function collectImages(value: unknown, images: ImportedLotPhoto[] = []): Importe
   return images;
 }
 
+function dedupeCopartImages(images: ImportedLotPhoto[]) {
+  logCopart("copart_lot_images_raw_count", { count: images.length });
+
+  const grouped = new Map<string, ImportedLotPhoto[]>();
+
+  for (const photo of images) {
+    const normalizedImageUrl = normalizeImageUrl(photo.imageUrl);
+
+    if (!normalizedImageUrl) {
+      continue;
+    }
+
+    const normalizedPhoto = {
+      ...photo,
+      imageUrl: normalizedImageUrl,
+      thumbnailUrl: normalizeImageUrl(photo.thumbnailUrl),
+      imageType: photo.imageType ?? imageTypeFromUrl(normalizedImageUrl)
+    };
+    const groupKey = normalizedPhoto.sequenceNumber ? `seq:${normalizedPhoto.sequenceNumber}` : `url:${imageBaseKey(normalizedPhoto.imageUrl)}`;
+    const current = grouped.get(groupKey) ?? [];
+    current.push(normalizedPhoto);
+    grouped.set(groupKey, current);
+  }
+
+  const deduped = [...grouped.values()].map((group, index) => {
+    const sorted = [...group].sort((a, b) => imageQualityRank(b) - imageQualityRank(a));
+    const best = sorted[0];
+    const thumbnail = sorted.find((photo) => (photo.imageType ?? imageTypeFromUrl(photo.imageUrl) ?? "").toLowerCase().includes("thumbnail"));
+
+    return {
+      ...best,
+      thumbnailUrl: thumbnail?.imageUrl ?? best.thumbnailUrl,
+      sequenceNumber: best.sequenceNumber ?? index + 1,
+      source: "copart"
+    };
+  });
+
+  logCopart("copart_lot_images_grouped_count", { count: grouped.size });
+  logCopart("copart_lot_images_deduped_count", { count: deduped.length });
+  logCopart("copart_lot_images_removed_duplicates_count", { count: Math.max(0, images.length - deduped.length) });
+
+  return deduped.sort((a, b) => (a.sequenceNumber ?? 9999) - (b.sequenceNumber ?? 9999));
+}
+
 function normalizeImages(payload: CopartPayload, details: CopartLotDetails) {
   const rawImages = payload.data?.imagesList ?? payload.data?.lotImages ?? payload.data?.images ?? payload.data ?? payload;
-  const unique = new Map<string, ImportedLotPhoto>();
-
-  for (const photo of collectImages(rawImages)) {
-    if (!unique.has(photo.imageUrl)) {
-      unique.set(photo.imageUrl, photo);
-    }
-  }
+  const images = collectImages(rawImages);
 
   const mainImage = normalizeImageUrl(asString(details.tims));
 
-  if (mainImage && !unique.has(mainImage)) {
-    unique.set(mainImage, {
+  if (mainImage) {
+    images.push({
       imageUrl: mainImage,
       thumbnailUrl: mainImage,
-      imageType: "thumbnail",
-      sequenceNumber: unique.size + 1,
+      imageType: imageTypeFromUrl(mainImage) ?? "thumbnail",
+      sequenceNumber: 1,
       source: "copart"
     });
   }
 
-  return [...unique.values()].sort((a, b) => (a.sequenceNumber ?? 9999) - (b.sequenceNumber ?? 9999));
+  return dedupeCopartImages(images);
 }
 
-async function fetchLotDetails(url: string, lotNumber: string) {
+async function fetchLotDetails(url: string, lotNumber: string): Promise<CopartDetailsFetchResult> {
   const endpoint = endpointFor("", lotNumber);
 
   try {
@@ -418,18 +593,28 @@ async function fetchLotDetails(url: string, lotNumber: string) {
       usedScrapingBee: false
     };
   } catch (error) {
+    logCopart("copart_direct_blocked", {
+      code: error instanceof LotImportError ? error.code : "UNKNOWN_ERROR"
+    });
     logCopart("copart_structured_blocked", {
       code: error instanceof LotImportError ? error.code : "UNKNOWN_ERROR"
     });
 
-    const fallbackPayload = await fetchWithScrapingBee(endpoint, url);
+    const fallbackPayload = await fetchWithScrapingBee(endpoint, url, "structured");
 
     if (fallbackPayload) {
-      return {
-        endpoint,
-        details: validateDetailsPayload(fallbackPayload, lotNumber),
-        usedScrapingBee: true
-      };
+      try {
+        return {
+          endpoint,
+          details: validateScrapingBeeDetailsPayload(fallbackPayload, lotNumber),
+          usedScrapingBee: true
+        };
+      } catch (fallbackError) {
+        logCopart("scrapingbee_structured_parse_failed", {
+          code: fallbackError instanceof LotImportError ? fallbackError.code : "UNKNOWN_ERROR",
+          message: fallbackError instanceof Error ? fallbackError.message : "unknown"
+        });
+      }
     }
 
     if (error instanceof LotImportError) {
@@ -440,7 +625,7 @@ async function fetchLotDetails(url: string, lotNumber: string) {
   }
 }
 
-async function fetchLotImages(url: string, lotNumber: string, details: CopartLotDetails) {
+async function fetchLotImages(url: string, lotNumber: string, details: CopartLotDetails): Promise<CopartImagesFetchResult> {
   const endpoint = endpointFor("lotImages/", lotNumber);
 
   logCopart("copart_lot_images_started", { lotNumber });
@@ -453,6 +638,7 @@ async function fetchLotImages(url: string, lotNumber: string, details: CopartLot
     return {
       images,
       endpoint,
+      usedScrapingBee: false,
       alert: images.length === 0 ? "Os dados do lote foram importados, mas a galeria de fotos veio vazia." : undefined
     };
   } catch (error) {
@@ -460,11 +646,20 @@ async function fetchLotImages(url: string, lotNumber: string, details: CopartLot
       code: error instanceof LotImportError ? error.code : "UNKNOWN_ERROR"
     });
 
-    const fallbackPayload = await fetchWithScrapingBee(endpoint, url);
+    const fallbackPayload = await fetchWithScrapingBee(endpoint, url, "images");
     if (fallbackPayload) {
-      const images = normalizeImages(fallbackPayload, details);
-      logCopart("copart_lot_images_count", { count: images.length });
-      return { images, endpoint, alert: undefined };
+      try {
+        const images = normalizeImages(fallbackPayload, details);
+        logCopart("copart_lot_images_count", { count: images.length });
+        logCopart("scrapingbee_images_count", { count: images.length });
+        logCopart("scrapingbee_images_parse_success", { count: images.length });
+        return { images, endpoint, usedScrapingBee: true, alert: undefined };
+      } catch (fallbackError) {
+        logCopart("scrapingbee_images_parse_failed", {
+          code: fallbackError instanceof LotImportError ? fallbackError.code : "UNKNOWN_ERROR",
+          message: fallbackError instanceof Error ? fallbackError.message : "unknown"
+        });
+      }
     }
 
     logCopart("copart_lot_images_blocked", {
@@ -474,6 +669,7 @@ async function fetchLotImages(url: string, lotNumber: string, details: CopartLot
     return {
       images: normalizeImages({ data: {} }, details),
       endpoint,
+      usedScrapingBee: false,
       alert: "Os dados do lote foram importados, mas não foi possível importar todas as fotos."
     };
   }
@@ -484,9 +680,10 @@ function buildVehicleData(url: string, lotNumber: string, details: CopartLotDeta
   const vehicleYard = asString(details.pyn);
   const mainImageUrl = photos[0]?.imageUrl ?? normalizeImageUrl(asString(details.tims));
   const saleDate = parseCopartDate(details.ad);
-  const version = asString(details["versão"]) ?? asString(details.version);
+  const version = asString(details["versão"]) ?? asString(details["versÃ£o"]) ?? asString(details.version);
   const damageDescription = asString(details.damageDesc);
   const mainDamage = asString(details.lt);
+  const fipeAndMileage = resolveFipeAndMileage(details);
 
   return {
     lotUrl: url,
@@ -501,7 +698,7 @@ function buildVehicleData(url: string, lotNumber: string, details: CopartLotDeta
     manufacturingYear: parseInteger(details.lcy),
     modelYear: parseInteger(details.my),
     armored: parseCopartBoolean(details.blindado),
-    fipeValue: asNumber(details.orr),
+    fipeValue: fipeAndMileage.fipeValue,
     documentType: asString(details.stt),
     documentTypeCode: asText(details.docType),
     sellerName: asString(details.scn),
@@ -513,8 +710,8 @@ function buildVehicleData(url: string, lotNumber: string, details: CopartLotDeta
     runningConditionText: asString(details.drvr),
     category: asString(details.vehTypDesc),
     fuel: asString(details.ft),
-    mileage: parseInteger(details.la),
-    mileageUnit: asString(details.ord),
+    mileage: fipeAndMileage.mileage,
+    mileageUnit: fipeAndMileage.mileageUnit,
     chassis: asString(details.fv),
     chassisType: asString(details.vt),
     plateOrFinal: asText(details.ldlp),
@@ -554,7 +751,19 @@ export class CopartLotProvider {
     logCopart("copart_url_received", { url: new URL(url).pathname });
     logCopart("copart_lot_number_extracted", { lotNumber });
 
-    const lot = await fetchLotDetails(url, lotNumber);
+    let lot: CopartDetailsFetchResult;
+    try {
+      lot = await fetchLotDetails(url, lotNumber);
+    } catch (error) {
+      await fetchLotImages(url, lotNumber, {});
+
+      if (error instanceof LotImportError) {
+        throw error;
+      }
+
+      throw new LotImportError("Não foi possível importar o lote agora. Tente novamente ou preencha manualmente.", "UNKNOWN_ERROR", 500);
+    }
+
     const gallery = await fetchLotImages(url, lotNumber, lot.details);
     const vehicleData = buildVehicleData(url, lotNumber, lot.details, gallery.images);
 
@@ -570,7 +779,7 @@ export class CopartLotProvider {
       pendingFields.length <= 2
         ? "Lote da Copart importado pela API estruturada e pronto para revisão."
         : "Lote da Copart importado parcialmente. Confira os campos pendentes antes de salvar.",
-      ...(lot.usedScrapingBee ? ["Fallback ScrapingBee usado para acessar os endpoints estruturados."] : []),
+      ...(lot.usedScrapingBee || gallery.usedScrapingBee ? ["Fallback ScrapingBee usado para acessar os endpoints estruturados."] : []),
       ...(gallery.alert ? [gallery.alert] : [])
     ];
 
@@ -589,6 +798,7 @@ export class CopartLotProvider {
         finalUrl: url,
         statusCode: 200,
         sourceMethod: lot.usedScrapingBee ? "scrapingbee_copart_structured_api" : "copart_structured_api",
+        imagesSourceMethod: gallery.usedScrapingBee ? "scrapingbee_copart_images_api" : "copart_images_api",
         lotDetailsEndpoint: lot.endpoint,
         lotImagesEndpoint: gallery.endpoint,
         lotDetails: lot.details,

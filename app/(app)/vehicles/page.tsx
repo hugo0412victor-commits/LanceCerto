@@ -9,8 +9,39 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/format";
 import { getVehiclesList } from "@/lib/data";
 
-export default async function VehiclesPage() {
+export default async function VehiclesPage({
+  searchParams
+}: {
+  searchParams?: {
+    q?: string;
+    importUrl?: string;
+  };
+}) {
   const vehicles = await getVehiclesList();
+  const searchQuery = searchParams?.q?.trim() ?? "";
+  const importUrl = searchParams?.importUrl?.trim();
+  const normalizedSearchQuery = searchQuery.toLowerCase();
+  const filteredVehicles = normalizedSearchQuery
+    ? vehicles.filter((vehicle) =>
+        [
+          vehicle.stockCode,
+          vehicle.lotCode,
+          vehicle.displayName,
+          vehicle.brand,
+          vehicle.model,
+          vehicle.version,
+          vehicle.auctionHouse?.name,
+          vehicle.sellerName,
+          vehicle.yard,
+          vehicle.city,
+          vehicle.state
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedSearchQuery)
+      )
+    : vehicles;
 
   return (
     <div className="space-y-6">
@@ -28,15 +59,16 @@ export default async function VehiclesPage() {
         }
       />
 
-      <LotImportCard defaultUrl="https://www.copart.com.br/lot/1090276" />
+      <LotImportCard autoImportUrl={importUrl} embedded />
 
       <Card>
         <CardHeader
           title="Lotes cadastrados"
           description="Carteira ativa, em preparação, anunciada e já convertida em venda."
-          actions={<Badge tone="info">{vehicles.length} registros</Badge>}
+          actions={<Badge tone="info">{filteredVehicles.length} registros</Badge>}
         />
         <CardContent className="overflow-x-auto">
+          {searchQuery ? <p className="mb-4 text-sm text-muted">Resultado da busca por “{searchQuery}”.</p> : null}
           <table className="min-w-full text-left text-sm">
             <thead>
               <tr className="border-b border-border bg-background/70 text-muted">
@@ -51,7 +83,7 @@ export default async function VehiclesPage() {
               </tr>
             </thead>
             <tbody>
-              {vehicles.map((vehicle) => (
+              {filteredVehicles.map((vehicle) => (
                 <tr key={vehicle.id} className="border-b border-border/60 transition hover:bg-background/50">
                   <td className="px-4 py-4 font-semibold text-primary">{vehicle.stockCode ?? "Sem código"}</td>
                   <td className="px-4 py-4">
@@ -86,6 +118,13 @@ export default async function VehiclesPage() {
                   </td>
                 </tr>
               ))}
+              {filteredVehicles.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted">
+                    Nenhum lote encontrado para esta busca.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </CardContent>

@@ -6,6 +6,8 @@ import { PageHeader } from "@/components/common/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
+import { SaleCountdown } from "@/components/vehicles/sale-countdown";
+import { VehiclePhotoGallery } from "@/components/vehicles/vehicle-photo-gallery";
 import { VehicleStatusBadge } from "@/components/vehicles/status-badge";
 import { VEHICLE_STATUS_LABELS } from "@/lib/constants";
 import { getVehicleDetail } from "@/lib/data";
@@ -92,6 +94,14 @@ function getRunningConditionLabel(value?: boolean | null) {
   return "Pendente";
 }
 
+function getCopartLotUrl(lotUrl?: string | null, lotCode?: string | null) {
+  if (lotUrl) {
+    return lotUrl;
+  }
+
+  return lotCode ? `https://www.copart.com.br/lot/${lotCode}` : undefined;
+}
+
 export default async function VehicleDetailPage({
   params
 }: {
@@ -108,6 +118,7 @@ export default async function VehicleDetailPage({
   const latestRisk = vehicle.aiAnalyses.find((item) => item.analysisType === "LOT_RISK");
   const heroImageUrl = vehicle.photos[0]?.publicUrl ?? vehicle.mainPhotoUrl ?? vehicle.lotSnapshots[0]?.photoUrls?.[0] ?? "/placeholders/vehicle-1.svg";
   const vehicleDisplayName = vehicle.displayName ?? [vehicle.brand, vehicle.model, vehicle.version].filter(Boolean).join(" ");
+  const copartLotUrl = getCopartLotUrl(vehicle.lotUrl, vehicle.lotCode);
   const latestSnapshotRaw = vehicle.lotSnapshots[0]?.rawJson as
     | { extractedFields?: { runningConditionText?: string; auctionDateText?: string } }
     | undefined;
@@ -229,14 +240,17 @@ export default async function VehicleDetailPage({
         eyebrow="Resumo do veículo"
         title={vehicleDisplayName || "Veículo"}
         description="Visão executiva com dados principais, valores, score, status e resumo financeiro. Os detalhes operacionais ficam nas áreas próprias do sistema."
+        actions={
+          copartLotUrl ? (
+            <a href={copartLotUrl} target="_blank" rel="noopener noreferrer">
+              <Button variant="accent">Abrir lote na Copart</Button>
+            </a>
+          ) : null
+        }
       />
 
       <Card className="overflow-hidden">
-        <CardContent className="grid gap-6 p-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-          <div className="overflow-hidden rounded-[1.5rem] border border-border bg-white shadow-sm">
-            <img src={heroImageUrl} alt="Foto principal do veículo" className="h-[260px] w-full object-cover xl:h-full" />
-          </div>
-
+        <CardContent className="space-y-6 p-6">
           <div className="grid gap-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="min-w-0">
@@ -244,6 +258,9 @@ export default async function VehicleDetailPage({
                 <h2 className="mt-2 font-display text-3xl font-bold tracking-[-0.05em] text-primary">
                   {vehicleDisplayName || "Veículo em análise"}
                 </h2>
+                <p className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+                  {vehicle.lotCode ? `Lote ${vehicle.lotCode}` : "Lote pendente"}
+                </p>
                 <p className="mt-2 text-sm leading-6 text-muted">
                   {vehicle.notes ?? "Resumo operacional pronto para consulta rápida."}
                 </p>
@@ -256,34 +273,36 @@ export default async function VehicleDetailPage({
               </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {summaryCards.map((item) => (
-                <div key={item.label} className="rounded-[1.4rem] border border-border bg-background/55 p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-muted">{item.label}</p>
-                  <p className="mt-2 text-xl font-semibold text-primary">{item.value}</p>
-                  <p className="mt-1 text-xs leading-5 text-muted">{item.detail}</p>
-                </div>
-              ))}
+            <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+              <SaleCountdown saleDate={vehicle.auctionDate} sold={vehicle.sold} />
+              {copartLotUrl ? (
+                <a
+                  href={copartLotUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center rounded-2xl border border-accent/30 bg-accent/10 px-4 py-3 text-sm font-semibold text-accent transition hover:bg-accent/15"
+                >
+                  Abrir lote na Copart
+                </a>
+              ) : null}
             </div>
+          </div>
+
+          <div className="min-w-0">
+            <VehiclePhotoGallery photos={vehicle.photos} mainImageUrl={heroImageUrl} vehicleTitle={vehicleDisplayName} />
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {summaryCards.map((item) => (
+              <div key={item.label} className="rounded-[1.4rem] border border-border bg-background/55 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted">{item.label}</p>
+                <p className="mt-2 text-xl font-semibold text-primary">{item.value}</p>
+                <p className="mt-1 text-xs leading-5 text-muted">{item.detail}</p>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>
-
-      {vehicle.photos.length > 0 ? (
-        <Card>
-          <CardHeader title="Fotos do lote" description="Galeria importada e preservada no LanceCerto." />
-          <CardContent className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-6">
-            {vehicle.photos.map((photo, index) => (
-              <a key={photo.id} href={photo.publicUrl} target="_blank" rel="noreferrer" className="overflow-hidden rounded-2xl border border-border bg-white">
-                <img src={photo.thumbnailUrl ?? photo.publicUrl} alt={photo.caption ?? `Foto ${index + 1}`} className="h-28 w-full object-cover" />
-                <div className="px-3 py-2 text-xs text-muted">
-                  #{photo.sequenceNumber ?? index + 1} {photo.imageType ? `- ${photo.imageType}` : ""}
-                </div>
-              </a>
-            ))}
-          </CardContent>
-        </Card>
-      ) : null}
 
       <div className="grid items-stretch gap-6 xl:grid-cols-[1.05fr_0.95fr]">
         <div className="grid h-full gap-6 xl:grid-rows-[1fr_1fr]">

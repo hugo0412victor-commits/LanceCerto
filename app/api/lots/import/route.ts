@@ -312,27 +312,59 @@ export async function POST(request: Request) {
 
     const importedPhotos = result.vehicleData.photos ?? [];
     if (importedPhotos.length > 0) {
-      const existingPhotoUrls = new Set(
-        (
-          await prisma.vehiclePhoto.findMany({
+      const existingCopartPhotos = await prisma.vehiclePhoto.findMany({
+        where: {
+          vehicleId: vehicle.id,
+          OR: [{ source: "copart" }, { sourceUrl: result.vehicleData.lotUrl }]
+        },
+        orderBy: [{ sequenceNumber: "asc" }, { createdAt: "asc" }]
+      });
+      const existingBySequence = new Map<number, typeof existingCopartPhotos>();
+
+      for (const photo of existingCopartPhotos) {
+        const sequenceNumber = photo.sequenceNumber ?? photo.sortOrder;
+        const group = existingBySequence.get(sequenceNumber) ?? [];
+        group.push(photo);
+        existingBySequence.set(sequenceNumber, group);
+      }
+
+      for (const [index, photo] of importedPhotos.entries()) {
+        const sequenceNumber = photo.sequenceNumber ?? index + 1;
+        const existingGroup = existingBySequence.get(sequenceNumber) ?? [];
+        const primaryExisting = existingGroup[0];
+
+        if (primaryExisting) {
+          await prisma.vehiclePhoto.update({
             where: {
-              vehicleId: vehicle.id,
-              publicUrl: {
-                in: importedPhotos.map((photo) => photo.imageUrl)
-              }
+              id: primaryExisting.id
             },
-            select: {
-              publicUrl: true
+            data: {
+              caption: index === 0 ? "Foto principal Copart" : "Foto Copart",
+              storagePath: photo.imageUrl,
+              publicUrl: photo.imageUrl,
+              thumbnailUrl: photo.thumbnailUrl,
+              imageType: photo.imageType,
+              sequenceNumber,
+              source: photo.source,
+              sourceUrl: result.vehicleData.lotUrl,
+              sortOrder: sequenceNumber,
+              isPrimary: index === 0
             }
-          })
-        ).map((photo) => photo.publicUrl)
-      );
+          });
 
-      const newPhotos = importedPhotos.filter((photo) => !existingPhotoUrls.has(photo.imageUrl));
-
-      if (newPhotos.length > 0) {
-        await prisma.vehiclePhoto.createMany({
-          data: newPhotos.map((photo, index) => ({
+          const duplicateIds = existingGroup.slice(1).map((duplicate) => duplicate.id);
+          if (duplicateIds.length > 0) {
+            await prisma.vehiclePhoto.deleteMany({
+              where: {
+                id: {
+                  in: duplicateIds
+                }
+              }
+            });
+          }
+        } else {
+          await prisma.vehiclePhoto.create({
+            data: {
             vehicleId: vehicle.id,
             category: "ORIGINAIS_LEILAO",
             caption: index === 0 ? "Foto principal Copart" : "Foto Copart",
@@ -340,13 +372,14 @@ export async function POST(request: Request) {
             publicUrl: photo.imageUrl,
             thumbnailUrl: photo.thumbnailUrl,
             imageType: photo.imageType,
-            sequenceNumber: photo.sequenceNumber ?? index + 1,
+            sequenceNumber,
             source: photo.source,
             sourceUrl: result.vehicleData.lotUrl,
-            sortOrder: photo.sequenceNumber ?? index + 1,
-            isPrimary: index === 0 && !vehicle.mainPhotoUrl
-          }))
-        });
+            sortOrder: sequenceNumber,
+            isPrimary: index === 0
+            }
+          });
+        }
       }
     }
 

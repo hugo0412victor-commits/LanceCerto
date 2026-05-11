@@ -452,19 +452,44 @@ Campos principais mapeados: `ln` para código do lote, `mkn` marca, `lm` modelo,
 
 As fotos vêm do endpoint `lotImages`. A importação normaliza URLs iniciadas com `//`, ordena por `sequenceNumber`, salva em `VehiclePhoto` com `source = copart`, usa a primeira imagem como principal e evita duplicar URLs já salvas para o mesmo veículo. Se a galeria falhar, o lote ainda pode ser salvo usando `tims` como imagem principal.
 
+Como a Copart retorna variações da mesma foto (`thumbnail`, `vga` e imagem maior), o importador agrupa por `sequenceNumber`, escolhe uma imagem final por sequência e prioriza a versão de maior qualidade. A thumbnail fica apenas em `thumbnailUrl` para pré-visualização, sem virar uma foto extra na galeria.
+
+Na exibição, `lotDetails.orr` é tratado como Valor FIPE quando vier preenchido. Em alguns lotes da Copart Brasil, como `1107348`, `orr` vem zerado e `lotDetails.la` traz o valor que aparece na tela como FIPE; nesse caso o sistema usa `la` como FIPE e deixa a quilometragem pendente. A quilometragem só é exibida quando houver um valor separado confiável para KM.
+
+A página do veículo usa uma galeria com imagem principal, miniaturas, setas laterais, contador de fotos, botão para ver todas as fotos e visualização ampliada. Também exibe o botão **Abrir lote na Copart**, usando a URL original salva em `lotUrl` ou montando `https://www.copart.com.br/lot/{lotCode}` quando necessário.
+
+Quando `lotDetails.ad` está disponível, o sistema salva a data em `auctionDate` e o timestamp bruto em `saleDateTimestamp`. A interface mostra a data/hora em `America/Sao_Paulo` e um contador regressivo; se a venda passou, exibe `Venda encerrada`, e se `lotSoldFlag` vier verdadeiro, exibe `Lote vendido`.
+
 ### ScrapingBee opcional
 
 Se a Copart bloquear a chamada direta, o backend tenta os mesmos endpoints via ScrapingBee quando `SCRAPINGBEE_API_KEY` estiver configurada:
 
 ```env
-SCRAPINGBEE_API_KEY=""
-SCRAPINGBEE_RENDER_JS="true"
-SCRAPINGBEE_WAIT_MS="5000"
-SCRAPINGBEE_PREMIUM_PROXY="false"
-SCRAPINGBEE_COUNTRY_CODE="br"
+SCRAPINGBEE_API_KEY=
+SCRAPINGBEE_RENDER_JS=true
+SCRAPINGBEE_WAIT_MS=5000
+SCRAPINGBEE_PREMIUM_PROXY=false
+SCRAPINGBEE_COUNTRY_CODE=br
 ```
 
 A chave fica apenas no backend. O fallback não usa a página visual `/lot/{lotNumber}` como fonte principal.
+
+Logs úteis na Vercel:
+
+- `copart_direct_started`
+- `copart_direct_blocked`
+- `scrapingbee_key_present`
+- `scrapingbee_structured_started`
+- `scrapingbee_structured_status`
+- `scrapingbee_structured_body_length`
+- `scrapingbee_structured_parse_success`
+- `scrapingbee_structured_parse_failed`
+- `scrapingbee_images_started`
+- `scrapingbee_images_count`
+- `scrapingbee_images_parse_success`
+- `scrapingbee_images_parse_failed`
+
+O erro de bloqueio só deve chegar à interface depois de o backend tentar os endpoints estruturados diretos e, quando `SCRAPINGBEE_API_KEY` existir, repetir esses mesmos endpoints via ScrapingBee.
 
 ### Teste local e Vercel
 

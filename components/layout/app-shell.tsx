@@ -1,6 +1,5 @@
 import type { Session } from "next-auth";
-import Link from "next/link";
-import { Bell, Plus, Search, UserCircle2 } from "lucide-react";
+import { Bell, UserCircle2 } from "lucide-react";
 import { getServerAuthSession } from "@/lib/auth";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +8,7 @@ import { USER_ROLE_LABELS } from "@/lib/constants";
 import { LogoutButton } from "@/components/layout/logout-button";
 import { getBrandingSettings } from "@/lib/system-settings";
 import { canWrite } from "@/lib/permissions";
+import { GlobalSearchBar } from "@/components/layout/global-search-bar";
 
 async function UserHeader({ session }: { session: Session | null }) {
   return (
@@ -82,20 +82,7 @@ export async function AppShell({
             </div>
 
             <div className="mt-5 rounded-[1.6rem] border border-border/70 bg-background/55 p-4">
-              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_190px]">
-                <div className="flex items-center rounded-2xl border border-border bg-white px-4 py-3 text-sm text-muted shadow-sm">
-                  <Search className="mr-2 h-4 w-4 shrink-0" />
-                  <span className="truncate">Buscar lote, placa, modelo, cliente ou fornecedor</span>
-                </div>
-                {userCanWrite ? (
-                  <Link href="/vehicles/new" className="w-full">
-                    <span className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-accent px-4 text-sm font-semibold text-white shadow-glow transition hover:bg-[#C88914]">
-                      <Plus className="h-4 w-4" />
-                      Novo lote
-                    </span>
-                  </Link>
-                ) : null}
-              </div>
+              <GlobalSearchBar userCanWrite={userCanWrite} />
             </div>
           </div>
         </header>

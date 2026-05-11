@@ -1,12 +1,14 @@
 "use client";
 
-import { startTransition, useMemo, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Edit3, ExternalLink, ImagePlus, LoaderCircle, Save, Wand2 } from "lucide-react";
+import { Edit3, ImagePlus, LoaderCircle, Save, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { SaleCountdown } from "@/components/vehicles/sale-countdown";
+import { VehiclePhotoGallery } from "@/components/vehicles/vehicle-photo-gallery";
 
 type FeedbackTone = "success" | "warning" | "error";
 
@@ -111,7 +113,6 @@ const textFields = {
   characteristics: [
     ["category", "Categoria"],
     ["mileage", "Quilometragem"],
-    ["mileageUnit", "Unidade"],
     ["fuel", "Combustível"],
     ["hasKey", "Chave"],
     ["armored", "Blindado"],
@@ -137,9 +138,42 @@ const textFields = {
   ],
   documents: [
     ["documentsUrl", "Link de documentos"],
+    ["lotUrl", "Link direto Copart"],
     ["specificConditionsUrl", "Condições específicas"]
   ]
 } as const;
+
+const moneyFormatter = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const numberFormatter = new Intl.NumberFormat("pt-BR");
+const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "America/Sao_Paulo"
+});
+
+function formatPreviewValue(key: keyof VehicleImportData, value: unknown, data: VehicleImportData) {
+  if (value === true) return "Sim";
+  if (value === false) return "Não";
+  if (value === undefined || value === null || value === "") return "";
+
+  if (["fipeValue", "currentBid", "bidIncrement", "buyNowPrice", "highestBid", "myBid"].includes(String(key))) {
+    return moneyFormatter.format(Number(value));
+  }
+
+  if (key === "mileage") {
+    return `${numberFormatter.format(Number(value))} ${data.mileageUnit ?? "km"}`;
+  }
+
+  if (key === "auctionDateText" && data.auctionDate) {
+    const date = new Date(data.auctionDate);
+    return Number.isNaN(date.getTime()) ? String(value) : dateTimeFormatter.format(date);
+  }
+
+  return String(value);
+}
 
 function fieldValue(value: unknown) {
   if (value === true) return "Sim";
@@ -200,7 +234,7 @@ function PreviewBlock({
               )
             ) : (
               <span className="block rounded-xl border border-border bg-background/60 px-3 py-2 text-sm font-medium text-foreground">
-                {fieldValue(data[key]) || "Pendente"}
+                {formatPreviewValue(key, data[key], data) || "Pendente"}
               </span>
             )}
           </label>
@@ -210,7 +244,15 @@ function PreviewBlock({
   );
 }
 
-export function LotImportCard({ defaultUrl }: { defaultUrl?: string }) {
+export function LotImportCard({
+  defaultUrl,
+  autoImportUrl,
+  embedded = false
+}: {
+  defaultUrl?: string;
+  autoImportUrl?: string;
+  embedded?: boolean;
+}) {
   const router = useRouter();
   const [url, setUrl] = useState(defaultUrl ?? "");
   const [loading, setLoading] = useState(false);
@@ -219,6 +261,8 @@ export function LotImportCard({ defaultUrl }: { defaultUrl?: string }) {
   const [feedback, setFeedback] = useState<ImportFeedback | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [duplicateAction, setDuplicateAction] = useState<"new" | "update" | "keep">("new");
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
+  const lastAutoImportUrl = useRef<string | null>(null);
 
   const photos = useMemo(() => preview?.vehicleData.photos ?? [], [preview]);
   const previewForSave = useMemo(
@@ -247,8 +291,16 @@ export function LotImportCard({ defaultUrl }: { defaultUrl?: string }) {
     );
   }
 
-  async function handlePreview() {
-    if (!url.trim()) {
+  function discardPreview() {
+    setPreview(null);
+    setFeedback(null);
+    setEditing(false);
+    setDuplicateAction("new");
+    setDiscardConfirmOpen(false);
+  }
+
+  const handlePreview = useCallback(async (inputUrl = url) => {
+    if (!inputUrl.trim()) {
       setFeedback({
         tone: "error",
         items: ["Cole o link do lote para iniciar a importação."]
@@ -259,6 +311,7 @@ export function LotImportCard({ defaultUrl }: { defaultUrl?: string }) {
     setLoading(true);
     setFeedback(null);
     setPreview(null);
+    setDiscardConfirmOpen(false);
 
     try {
       const response = await fetch("/api/lots/import", {
@@ -266,7 +319,7 @@ export function LotImportCard({ defaultUrl }: { defaultUrl?: string }) {
         headers: {
           "content-type": "application/json"
         },
-        body: JSON.stringify({ url, action: "preview" })
+        body: JSON.stringify({ url: inputUrl, action: "preview" })
       });
       const payload = (await response.json()) as ImportPreview & { ok?: boolean; error?: string; code?: string };
 
@@ -294,7 +347,17 @@ export function LotImportCard({ defaultUrl }: { defaultUrl?: string }) {
         items: ["Falha de conexão ao chamar a rota de importação. Confira os logs do backend."]
       });
     }
-  }
+  }, [url]);
+
+  useEffect(() => {
+    if (!autoImportUrl || lastAutoImportUrl.current === autoImportUrl) {
+      return;
+    }
+
+    lastAutoImportUrl.current = autoImportUrl;
+    setUrl(autoImportUrl);
+    void handlePreview(autoImportUrl);
+  }, [autoImportUrl, handlePreview]);
 
   async function handleSave() {
     if (!previewForSave) return;
@@ -360,17 +423,28 @@ export function LotImportCard({ defaultUrl }: { defaultUrl?: string }) {
           ? "border-rose-200 bg-rose-50 text-rose-900"
           : "border-border bg-white/75 text-slate-700";
 
+  if (embedded && !loading && !feedback && !preview) {
+    return null;
+  }
+
   return (
-    <Card className="overflow-hidden">
+    <Card className={embedded ? "overflow-hidden border-0 bg-transparent shadow-none [&>div:first-child]:hidden" : "overflow-hidden"}>
       <CardHeader title="Importação por link" description="Cole um link da Copart, revise a prévia e salve o veículo com o snapshot e a galeria internos." />
-      <CardContent className="space-y-4">
+      <CardContent className={embedded ? "space-y-4 p-0 [&>div:first-child]:hidden" : "space-y-4"}>
         <div className="flex flex-col gap-3 md:flex-row">
           <Input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://www.copart.com.br/lot/1107348" />
-          <Button type="button" variant="accent" onClick={handlePreview} disabled={loading} className="gap-2 whitespace-nowrap px-5 md:w-auto">
+          <Button type="button" variant="accent" onClick={() => handlePreview()} disabled={loading} className="gap-2 whitespace-nowrap px-5 md:w-auto">
             {loading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
             Importar lote
           </Button>
         </div>
+
+        {embedded && loading ? (
+          <div className="flex items-center gap-2 rounded-[1.4rem] border border-border bg-white p-4 text-sm font-medium text-primary">
+            <LoaderCircle className="h-4 w-4 animate-spin" />
+            Importando lote da Copart...
+          </div>
+        ) : null}
 
         {feedback ? (
           <div className={`rounded-[1.4rem] border p-4 text-sm ${feedbackClassName}`}>
@@ -381,7 +455,31 @@ export function LotImportCard({ defaultUrl }: { defaultUrl?: string }) {
         ) : null}
 
         {preview ? (
-          <div className="space-y-4">
+          <div className="relative space-y-4 rounded-[1.4rem] border border-border bg-background/35 p-4 pt-12">
+            <button
+              type="button"
+              aria-label="Descartar prévia"
+              onClick={() => setDiscardConfirmOpen(true)}
+              disabled={saving}
+              className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-muted shadow-sm transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            {discardConfirmOpen ? (
+              <div className="rounded-[1.4rem] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <p className="font-semibold">Deseja descartar esta prévia importada?</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button type="button" variant="ghost" onClick={() => setDiscardConfirmOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button type="button" variant="accent" onClick={discardPreview}>
+                    Descartar prévia
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
             {preview.existingVehicle ? (
               <div className="rounded-[1.4rem] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                 <p className="font-semibold">Já existe um veículo Copart com este lote.</p>
@@ -423,48 +521,36 @@ export function LotImportCard({ defaultUrl }: { defaultUrl?: string }) {
               </div>
             </div>
 
+            <div className="rounded-[1.4rem] border border-border bg-white p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-primary">Fotos</p>
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-muted">
+                  <ImagePlus className="h-3.5 w-3.5" />
+                  {photos.length} encontradas
+                </span>
+              </div>
+              <div className="mt-3">
+                <VehiclePhotoGallery photos={photos} mainImageUrl={preview.vehicleData.mainImageUrl} vehicleTitle={preview.vehicleData.displayName} />
+              </div>
+            </div>
+
             <div className="grid gap-4 xl:grid-cols-2">
               <PreviewBlock title="Dados do Veículo" fields={textFields.vehicle} data={preview.vehicleData} editing={editing} onChange={updateVehicleData} />
               <PreviewBlock title="Características" fields={textFields.characteristics} data={preview.vehicleData} editing={editing} onChange={updateVehicleData} />
-              <PreviewBlock title="Lance" fields={textFields.bid} data={preview.vehicleData} editing={editing} onChange={updateVehicleData} />
+              <PreviewBlock title="Valores" fields={[["fipeValue", "Valor FIPE"], ...textFields.bid]} data={preview.vehicleData} editing={editing} onChange={updateVehicleData} />
               <PreviewBlock title="Venda" fields={textFields.sale} data={preview.vehicleData} editing={editing} onChange={updateVehicleData} />
               <PreviewBlock title="Documentos" fields={textFields.documents} data={preview.vehicleData} editing={editing} onChange={updateVehicleData} />
-              <div className="rounded-[1.4rem] border border-border bg-white p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-semibold text-primary">Fotos</p>
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-muted">
-                    <ImagePlus className="h-3.5 w-3.5" />
-                    {photos.length} encontradas
-                  </span>
-                </div>
-                {photos.length > 0 ? (
-                  <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3">
-                    {photos.slice(0, 12).map((photo, index) => (
-                      <a key={`${photo.imageUrl}-${index}`} href={photo.imageUrl} target="_blank" rel="noreferrer" className="group overflow-hidden rounded-xl border border-border bg-background">
-                        <img src={photo.thumbnailUrl ?? photo.imageUrl} alt={`Foto ${index + 1} do lote`} className="h-24 w-full object-cover transition group-hover:scale-105" />
-                        <span className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-muted">
-                          #{photo.sequenceNumber ?? index + 1}
-                          <ExternalLink className="h-3 w-3" />
-                        </span>
-                      </a>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-3 rounded-xl border border-border bg-background/60 p-3 text-sm text-muted">
-                    Nenhuma foto foi encontrada automaticamente. Depois de salvar, adicione fotos por upload ou URL na área de fotos.
-                  </p>
-                )}
-              </div>
+              <SaleCountdown saleDate={preview.vehicleData.auctionDate ?? null} sold={preview.vehicleData.sold} />
             </div>
           </div>
-        ) : (
+        ) : feedback || !embedded ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.4rem] border border-border bg-background/55 p-4 text-sm text-muted">
             <span>Se a leitura automática falhar, siga pelo cadastro manual assistido.</span>
             <Button type="button" variant="ghost" onClick={() => router.push("/vehicles/new")}>
               Preencher manualmente
             </Button>
           </div>
-        )}
+        ) : null}
       </CardContent>
     </Card>
   );

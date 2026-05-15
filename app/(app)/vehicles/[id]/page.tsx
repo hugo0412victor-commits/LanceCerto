@@ -2,11 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { updateVehicleStatusAction } from "@/app/actions";
 import { FormulaCard } from "@/components/common/formula-card";
+import { DocumentManagement } from "@/components/documents/document-management";
 import { PageHeader } from "@/components/common/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { SaleCountdown } from "@/components/vehicles/sale-countdown";
+import { DeleteVehicleButton } from "@/components/vehicles/delete-vehicle-button";
 import { VehiclePhotoGallery } from "@/components/vehicles/vehicle-photo-gallery";
 import { VehicleStatusBadge } from "@/components/vehicles/status-badge";
 import { VEHICLE_STATUS_LABELS } from "@/lib/constants";
@@ -233,6 +235,17 @@ export default async function VehicleDetailPage({
       description: "Anúncios, leads e registro de venda."
     }
   ];
+  const documentVehicle = {
+    id: vehicle.id,
+    stockCode: vehicle.stockCode,
+    lotCode: vehicle.lotCode,
+    sourceProvider: vehicle.sourceProvider,
+    displayName: vehicle.displayName,
+    brand: vehicle.brand,
+    model: vehicle.model,
+    version: vehicle.version,
+    auctionHouseName: vehicle.auctionHouse?.name
+  };
 
   return (
     <div className="space-y-6">
@@ -241,11 +254,14 @@ export default async function VehicleDetailPage({
         title={vehicleDisplayName || "Veículo"}
         description="Visão executiva com dados principais, valores, score, status e resumo financeiro. Os detalhes operacionais ficam nas áreas próprias do sistema."
         actions={
-          copartLotUrl ? (
-            <a href={copartLotUrl} target="_blank" rel="noopener noreferrer">
-              <Button variant="accent">Abrir lote na Copart</Button>
-            </a>
-          ) : null
+          <div className="flex flex-wrap gap-2">
+            {copartLotUrl ? (
+              <a href={copartLotUrl} target="_blank" rel="noopener noreferrer">
+                <Button variant="accent">Abrir lote na Copart</Button>
+              </a>
+            ) : null}
+            <DeleteVehicleButton vehicleId={vehicle.id} vehicleName={vehicleDisplayName || "Veiculo"} />
+          </div>
         }
       />
 
@@ -464,6 +480,14 @@ export default async function VehicleDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      <DocumentManagement
+        title="Documentos do lote"
+        documents={vehicle.documents}
+        vehicles={[documentVehicle]}
+        compact
+        fixedVehicleId={vehicle.id}
+      />
 
       <Card>
         <CardHeader title="Áreas detalhadas" description="A ficha fica curta; use as sessões abaixo para trabalhar cada etapa." />

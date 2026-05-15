@@ -16,6 +16,8 @@ export type LotImportErrorCode =
   | "IMPORT_FAILED"
   | "UNKNOWN_ERROR";
 
+export type LotImportProviderKey = "copart" | "freitas" | "sodre-santoro";
+
 export type ImportedLotPhoto = {
   imageUrl: string;
   thumbnailUrl?: string;
@@ -91,6 +93,8 @@ export type LotImportContext = {
   title?: string;
   description?: string;
   statusCode?: number;
+  contentType?: string;
+  bodyLength?: number;
 };
 
 export type LotImportResult = {

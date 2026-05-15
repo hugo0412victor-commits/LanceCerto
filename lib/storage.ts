@@ -1,14 +1,20 @@
+import { randomUUID } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { slugify } from "@/lib/utils";
 
-export async function saveFileLocally(file: File, folder: string) {
+export async function saveFileLocally(file: File, folder: string, fileNameOverride?: string) {
   const storageRoot = process.env.LOCAL_STORAGE_PATH ?? "./public/uploads";
   const buffer = Buffer.from(await file.arrayBuffer());
-  const extension = path.extname(file.name) || "";
+  const extension = path.extname(file.name).toLowerCase() || "";
   const baseName = slugify(path.basename(file.name, extension)) || "arquivo";
-  const fileName = `${Date.now()}-${baseName}${extension}`;
-  const targetDir = path.resolve(storageRoot, folder);
+  const fileName = fileNameOverride ?? `${Date.now()}-${randomUUID()}-${baseName}${extension}`;
+  const safeFolder = folder
+    .replace(/\\/g, "/")
+    .split("/")
+    .map((part) => slugify(part) || "arquivos")
+    .join("/");
+  const targetDir = path.resolve(storageRoot, safeFolder);
 
   await mkdir(targetDir, { recursive: true });
 

@@ -45,12 +45,17 @@ function logLotImport(level: "info" | "warn" | "error", requestId: string, event
 
 function friendlyImportMessage(code?: string) {
   const messages: Record<string, string> = {
-    INVALID_URL: "Informe um link válido da Copart.",
-    LOT_NUMBER_NOT_FOUND: "Não conseguimos identificar o número do lote nesse link.",
+    INVALID_URL: "Informe um link valido de lote.",
+    UNSUPPORTED_PROVIDER: "Fonte de leilão ainda não suportada.",
+    LOT_NUMBER_NOT_FOUND: "Nao conseguimos identificar o numero do lote nesse link.",
     INCAPSULA_BLOCKED: "A Copart bloqueou a leitura automática neste ambiente. Você pode preencher os dados manualmente.",
-    ACCESS_BLOCKED: "A Copart bloqueou a leitura automática neste ambiente. Você pode preencher os dados manualmente.",
+    ACCESS_BLOCKED: "O site de origem bloqueou a leitura automática neste ambiente. Você pode preencher os dados manualmente.",
     LOT_IMAGES_NOT_FOUND: "Os dados do lote foram importados, mas não foi possível importar todas as fotos.",
+    LOT_DATA_NOT_FOUND: "Fonte detectada, mas não foi possível encontrar os dados do lote.",
+    DATA_NOT_FOUND: "Não encontramos informações suficientes para importar este lote.",
+    CONNECTION_FAILED: "Não foi possível acessar a página do lote.",
     PARSE_FAILED: "A página foi acessada, mas os dados do lote não foram encontrados automaticamente. Preencha os dados manualmente.",
+    IMPORT_FAILED: "Erro ao importar o lote. Confira os logs do servidor.",
     UNKNOWN_ERROR: "Não foi possível importar o lote agora. Tente novamente ou preencha manualmente."
   };
 
@@ -63,6 +68,7 @@ export async function POST(request: Request) {
   let submittedUrl: string | undefined;
 
   try {
+    console.log("[lot-import] route hit");
     logLotImport("info", requestId, "request_started", {
       nodeEnv: process.env.NODE_ENV,
       vercel: process.env.VERCEL === "1",
@@ -94,9 +100,11 @@ export async function POST(request: Request) {
       importData?: Awaited<ReturnType<LotImporter["importFromUrl"]>>;
       duplicateAction?: "new" | "update" | "keep";
     };
+    console.log("[lot-import] received body", body);
     const { url } = body;
     const action = body.action ?? "save";
     submittedUrl = url ?? body.importData?.vehicleData?.lotUrl;
+    console.log("[lot-import] received url", submittedUrl);
 
     if (!url && !body.importData) {
       logLotImport("warn", requestId, "missing_url");
@@ -119,11 +127,11 @@ export async function POST(request: Request) {
     });
 
     const existingVehicle =
-      result.provider === "copart" && result.vehicleData.lotCode
+      result.vehicleData.lotCode
         ? await prisma.vehicle.findFirst({
             where: {
               lotCode: result.vehicleData.lotCode,
-              sourceProvider: "copart"
+              sourceProvider: result.provider
             },
             select: {
               id: true,
@@ -203,12 +211,24 @@ export async function POST(request: Request) {
     const aggregatedAlerts = [...result.alerts, ...automaticMarketResearch.alerts, ...viability.assumptionsSummary];
 
     const auctionHouse = result.vehicleData.auctionHouseName
-      ? await prisma.auctionHouse.findFirst({
+      ? await prisma.auctionHouse.upsert({
           where: {
-            name: {
-              equals: result.vehicleData.auctionHouseName,
-              mode: "insensitive"
-            }
+            name: result.vehicleData.auctionHouseName
+          },
+          update: {
+            importerKey: result.provider,
+            website: result.vehicleData.lotUrl ? new URL(result.vehicleData.lotUrl).origin : undefined
+          },
+          create: {
+            name: result.vehicleData.auctionHouseName,
+            slug: result.vehicleData.auctionHouseName
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "-")
+              .replace(/^-|-$/g, ""),
+            website: result.vehicleData.lotUrl ? new URL(result.vehicleData.lotUrl).origin : undefined,
+            importerKey: result.provider
           }
         })
       : null;
@@ -312,16 +332,16 @@ export async function POST(request: Request) {
 
     const importedPhotos = result.vehicleData.photos ?? [];
     if (importedPhotos.length > 0) {
-      const existingCopartPhotos = await prisma.vehiclePhoto.findMany({
+      const existingImportedPhotos = await prisma.vehiclePhoto.findMany({
         where: {
           vehicleId: vehicle.id,
-          OR: [{ source: "copart" }, { sourceUrl: result.vehicleData.lotUrl }]
+          OR: [{ source: result.provider }, { sourceUrl: result.vehicleData.lotUrl }]
         },
         orderBy: [{ sequenceNumber: "asc" }, { createdAt: "asc" }]
       });
-      const existingBySequence = new Map<number, typeof existingCopartPhotos>();
+      const existingBySequence = new Map<number, typeof existingImportedPhotos>();
 
-      for (const photo of existingCopartPhotos) {
+      for (const photo of existingImportedPhotos) {
         const sequenceNumber = photo.sequenceNumber ?? photo.sortOrder;
         const group = existingBySequence.get(sequenceNumber) ?? [];
         group.push(photo);
@@ -339,7 +359,7 @@ export async function POST(request: Request) {
               id: primaryExisting.id
             },
             data: {
-              caption: index === 0 ? "Foto principal Copart" : "Foto Copart",
+              caption: index === 0 ? `Foto principal ${result.provider}` : `Foto ${result.provider}`,
               storagePath: photo.imageUrl,
               publicUrl: photo.imageUrl,
               thumbnailUrl: photo.thumbnailUrl,
@@ -367,7 +387,7 @@ export async function POST(request: Request) {
             data: {
             vehicleId: vehicle.id,
             category: "ORIGINAIS_LEILAO",
-            caption: index === 0 ? "Foto principal Copart" : "Foto Copart",
+            caption: index === 0 ? `Foto principal ${result.provider}` : `Foto ${result.provider}`,
             storagePath: photo.imageUrl,
             publicUrl: photo.imageUrl,
             thumbnailUrl: photo.thumbnailUrl,

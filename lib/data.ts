@@ -31,8 +31,12 @@ type RawVehicleDocumentRow = {
   createdAt: Date;
   updatedAt: Date;
   vehicleStockCode: string | null;
+  vehicleLotCode: string | null;
+  vehicleSourceProvider: string | null;
+  vehicleDisplayName: string | null;
   vehicleBrand: string | null;
   vehicleModel: string | null;
+  auctionHouseName: string | null;
   uploaderName: string | null;
 };
 
@@ -56,11 +60,16 @@ async function getVehicleDocumentsRaw(vehicleId?: string) {
       d."createdAt",
       d."updatedAt",
       v."stockCode" AS "vehicleStockCode",
+      v."lotCode" AS "vehicleLotCode",
+      v."sourceProvider" AS "vehicleSourceProvider",
+      v."displayName" AS "vehicleDisplayName",
       v."brand" AS "vehicleBrand",
       v."model" AS "vehicleModel",
+      ah."name" AS "auctionHouseName",
       u."name" AS "uploaderName"
     FROM "VehicleDocument" d
     INNER JOIN "Vehicle" v ON v."id" = d."vehicleId"
+    LEFT JOIN "AuctionHouse" ah ON ah."id" = v."auctionHouseId"
     LEFT JOIN "User" u ON u."id" = d."uploadedById"
     ${filter}
     ORDER BY d."createdAt" DESC
@@ -82,6 +91,10 @@ async function getVehicleDocumentsRaw(vehicleId?: string) {
     vehicle: {
       id: row.vehicleId,
       stockCode: row.vehicleStockCode,
+      lotCode: row.vehicleLotCode,
+      sourceProvider: row.vehicleSourceProvider,
+      displayName: row.vehicleDisplayName,
+      auctionHouseName: row.auctionHouseName,
       brand: row.vehicleBrand,
       model: row.vehicleModel
     },
@@ -719,6 +732,45 @@ export async function getSuppliersOverview() {
 
 export async function getDocumentsOverview() {
   return getVehicleDocumentsRaw();
+}
+
+export async function getDocumentsWorkspace() {
+  const [documents, vehicles] = await Promise.all([
+    getVehicleDocumentsRaw(),
+    prisma.vehicle.findMany({
+      select: {
+        id: true,
+        stockCode: true,
+        lotCode: true,
+        sourceProvider: true,
+        displayName: true,
+        brand: true,
+        model: true,
+        version: true,
+        auctionHouse: {
+          select: {
+            name: true
+          }
+        }
+      },
+      orderBy: [{ displayName: "asc" }, { createdAt: "desc" }]
+    })
+  ]);
+
+  return {
+    documents,
+    vehicles: vehicles.map((vehicle) => ({
+      id: vehicle.id,
+      stockCode: vehicle.stockCode,
+      lotCode: vehicle.lotCode,
+      sourceProvider: vehicle.sourceProvider,
+      displayName: vehicle.displayName,
+      brand: vehicle.brand,
+      model: vehicle.model,
+      version: vehicle.version,
+      auctionHouseName: vehicle.auctionHouse?.name ?? null
+    }))
+  };
 }
 
 export async function getPhotosOverview() {

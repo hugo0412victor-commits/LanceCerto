@@ -9,6 +9,7 @@ const buttonVariants = cva(
         primary: "bg-primary text-primary-foreground shadow-panel hover:bg-[#0A314C]",
         accent: "bg-accent text-accent-foreground shadow-glow hover:bg-[#C88914]",
         secondary: "border-primary/18 bg-white text-primary hover:border-primary/35 hover:bg-primary/5",
+        destructive: "bg-rose-600 text-white shadow-panel hover:bg-rose-700",
         ghost: "text-foreground hover:bg-slate-100"
       }
     },

@@ -155,10 +155,16 @@ async function seedBaseData() {
         importerKey: "copart"
       },
       {
+        name: "Freitas Leiloeiro",
+        slug: "freitas-leiloeiro",
+        website: "https://www.freitasleiloeiro.com.br",
+        importerKey: "freitas"
+      },
+      {
         name: "Sodre Santoro",
         slug: "sodre-santoro",
         website: "https://www.sodresantoro.com.br",
-        importerKey: "generic"
+        importerKey: "sodre-santoro"
       },
       {
         name: "Superbid",

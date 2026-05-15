@@ -27,6 +27,8 @@ const DEFAULT_HEADERS = {
 };
 
 const DEFAULT_FETCH_TIMEOUT_MS = 20000;
+const DEFAULT_BROWSER_CAPTURE_TIMEOUT_MS = 60000;
+const DEFAULT_BROWSER_VIRTUAL_TIME_BUDGET_MS = 15000;
 
 const BLOCK_PATTERNS = [
   /_incapsula_resource/i,
@@ -50,6 +52,16 @@ const execFileAsync = promisify(execFile);
 function getFetchTimeoutMs() {
   const configured = Number(process.env.LOT_IMPORT_FETCH_TIMEOUT_MS);
   return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_FETCH_TIMEOUT_MS;
+}
+
+function getBrowserCaptureTimeoutMs() {
+  const configured = Number(process.env.LOT_IMPORT_BROWSER_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_BROWSER_CAPTURE_TIMEOUT_MS;
+}
+
+function getBrowserVirtualTimeBudgetMs() {
+  const configured = Number(process.env.LOT_IMPORT_BROWSER_VIRTUAL_TIME_BUDGET_MS);
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_BROWSER_VIRTUAL_TIME_BUDGET_MS;
 }
 
 export async function fetchWithTimeout(input: string | URL, init: RequestInit = {}) {
@@ -300,8 +312,16 @@ export async function fetchLotPage(url: string): Promise<FetchLotPageResult> {
     requestedUrl: parsed.toString(),
     finalUrl,
     hostname: new URL(finalUrl).hostname,
-    statusCode: response.status
+    statusCode: response.status,
+    contentType: response.headers.get("content-type") ?? undefined
   };
+
+  console.info("[lot-import:fetch]", {
+    event: "http_response",
+    hostname: context.hostname,
+    statusCode: response.status,
+    contentType: response.headers.get("content-type")
+  });
 
   if (response.status === 404) {
     throw new LotImportError("O lote informado nao foi encontrado no site de origem.", "DATA_NOT_FOUND", 404, {
@@ -322,11 +342,19 @@ export async function fetchLotPage(url: string): Promise<FetchLotPageResult> {
   }
 
   const html = await response.text();
+  context.bodyLength = html.length;
+
+  console.info("[lot-import:fetch]", {
+    event: "html_received",
+    hostname: context.hostname,
+    length: html.length
+  });
 
   if (BLOCK_PATTERNS.some((pattern) => pattern.test(html))) {
     throw new LotImportError("O site de origem bloqueou a leitura automatica desta pagina.", "ACCESS_BLOCKED", 502, {
       ...context,
-      blockerDetected: true
+      blockerDetected: true,
+      bodyPrefix: html.slice(0, 240)
     });
   }
 
@@ -342,6 +370,8 @@ export function findLocalBrowser() {
 
 export async function fetchLotPageWithLocalBrowser(url: string): Promise<FetchLotPageResult> {
   const parsed = validateLotUrl(url);
+  const hostname = parsed.hostname.toLowerCase();
+  const isCopart = hostname.includes("copart.com");
 
   if (!canUseLocalBrowserFallback()) {
     throw new LotImportError(
@@ -376,21 +406,21 @@ export async function fetchLotPageWithLocalBrowser(url: string): Promise<FetchLo
         "--headless",
         "--disable-gpu",
         "--no-first-run",
-        "--virtual-time-budget=45000",
+        `--virtual-time-budget=${getBrowserVirtualTimeBudgetMs()}`,
         "--dump-dom",
         parsed.toString()
       ],
       {
-        timeout: 90000,
+        timeout: getBrowserCaptureTimeoutMs(),
         maxBuffer: 12 * 1024 * 1024
       }
     );
 
     let html = stdout?.trim();
 
-    // In this environment the direct browser child process sometimes returns only the shell
-    // of the Copart page. If core lot markers are missing, retry through PowerShell.
+    // Copart can return only the application shell in headless mode; retry only for Copart.
     if (
+      isCopart &&
       html &&
       !/lotdetailMakevalue|lotdetailModelvalue|lotdetailSaleinformationlocationvalue|thumbnailImg/i.test(html)
     ) {
@@ -398,6 +428,7 @@ export async function fetchLotPageWithLocalBrowser(url: string): Promise<FetchLo
     }
 
     if (
+      isCopart &&
       html &&
       !/lotdetailMakevalue|lotdetailModelvalue|lotdetailSaleinformationlocationvalue|thumbnailImg/i.test(html)
     ) {
@@ -411,12 +442,21 @@ export async function fetchLotPageWithLocalBrowser(url: string): Promise<FetchLo
       });
     }
 
+    console.info("[lot-import:browser]", {
+      event: "html_received",
+      hostname: parsed.hostname,
+      browser: browser.name,
+      length: html.length
+    });
+
     return {
       context: {
         requestedUrl: parsed.toString(),
         finalUrl: parsed.toString(),
         hostname: parsed.hostname,
         statusCode: 200,
+        contentType: "text/html",
+        bodyLength: html.length,
         description: browser.name
       },
       html

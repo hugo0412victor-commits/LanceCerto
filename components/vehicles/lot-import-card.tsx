@@ -138,7 +138,7 @@ const textFields = {
   ],
   documents: [
     ["documentsUrl", "Link de documentos"],
-    ["lotUrl", "Link direto Copart"],
+    ["lotUrl", "Link original"],
     ["specificConditionsUrl", "Condições específicas"]
   ]
 } as const;
@@ -429,10 +429,10 @@ export function LotImportCard({
 
   return (
     <Card className={embedded ? "overflow-hidden border-0 bg-transparent shadow-none [&>div:first-child]:hidden" : "overflow-hidden"}>
-      <CardHeader title="Importação por link" description="Cole um link da Copart, revise a prévia e salve o veículo com o snapshot e a galeria internos." />
+      <CardHeader title="Importação por link" description="Cole um link de lote suportado, revise a prévia e salve o veículo com o snapshot e a galeria internos." />
       <CardContent className={embedded ? "space-y-4 p-0 [&>div:first-child]:hidden" : "space-y-4"}>
         <div className="flex flex-col gap-3 md:flex-row">
-          <Input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://www.copart.com.br/lot/1107348" />
+          <Input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://www.freitasleiloeiro.com.br/Leiloes/LoteDetalhes?leilaoId=7816&loteNumero=170" />
           <Button type="button" variant="accent" onClick={() => handlePreview()} disabled={loading} className="gap-2 whitespace-nowrap px-5 md:w-auto">
             {loading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
             Importar lote
@@ -442,7 +442,7 @@ export function LotImportCard({
         {embedded && loading ? (
           <div className="flex items-center gap-2 rounded-[1.4rem] border border-border bg-white p-4 text-sm font-medium text-primary">
             <LoaderCircle className="h-4 w-4 animate-spin" />
-            Importando lote da Copart...
+            Importando lote...
           </div>
         ) : null}
 
@@ -482,7 +482,7 @@ export function LotImportCard({
 
             {preview.existingVehicle ? (
               <div className="rounded-[1.4rem] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                <p className="font-semibold">Já existe um veículo Copart com este lote.</p>
+                <p className="font-semibold">Já existe um veículo desta fonte com este lote.</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {[
                     ["update", "Atualizar dados"],

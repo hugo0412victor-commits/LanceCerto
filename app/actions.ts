@@ -1187,29 +1187,142 @@ export async function deleteExpenseAction(formData: FormData) {
 }
 
 export async function deleteVehicleAction(formData: FormData) {
-  const session = await getServerAuthSession();
-  assertCanDelete(session?.user.role);
   const id = String(formData.get("id") ?? "").trim();
 
   if (!id) {
-    return;
+    return {
+      ok: false,
+      error: "Veiculo nao informado para exclusao."
+    };
   }
 
-  await prisma.vehicle.delete({
-    where: {
-      id
+  try {
+    const session = await getServerAuthSession();
+    assertCanDelete(session?.user.role);
+
+    console.log("[vehicle-delete]", {
+      event: "delete_started",
+      vehicleId: id,
+      userId: session?.user.id
+    });
+
+    const vehicle = await prisma.vehicle.findUnique({
+      where: {
+        id
+      },
+      select: {
+        id: true,
+        displayName: true,
+        lotCode: true,
+        photos: { select: { id: true } },
+        documents: { select: { id: true } },
+        expenses: { select: { id: true } },
+        processes: { select: { id: true } },
+        lotSnapshots: { select: { id: true } },
+        marketResearches: { select: { id: true } },
+        advertisements: { select: { id: true } },
+        aiAnalyses: { select: { id: true } },
+        sale: { select: { id: true } },
+        opportunityScore: { select: { id: true } },
+        financialSummary: { select: { id: true } },
+        simulations: { select: { id: true } },
+        leads: { select: { id: true } },
+        cashFlows: { select: { id: true } },
+        financialEntries: { select: { id: true } },
+        payables: { select: { id: true } },
+        receivables: { select: { id: true } },
+        partnerCommissions: { select: { id: true } }
+      }
+    });
+
+    if (!vehicle) {
+      console.warn("[vehicle-delete]", {
+        event: "delete_not_found",
+        vehicleId: id
+      });
+
+      return {
+        ok: false,
+        error: "Lote nao encontrado ou ja excluido."
+      };
     }
-  });
 
-  await createAuditLog({
-    userId: session?.user.id,
-    entityType: "Vehicle",
-    entityId: id,
-    action: "DELETE",
-    message: "Veiculo excluido"
-  });
+    console.log("[vehicle-delete]", {
+      event: "related_records_detected",
+      vehicleId: id,
+      cascade: {
+        photos: vehicle.photos.length,
+        documents: vehicle.documents.length,
+        expenses: vehicle.expenses.length,
+        processes: vehicle.processes.length,
+        lotSnapshots: vehicle.lotSnapshots.length,
+        marketResearches: vehicle.marketResearches.length,
+        advertisements: vehicle.advertisements.length,
+        aiAnalyses: vehicle.aiAnalyses.length,
+        sale: vehicle.sale ? 1 : 0,
+        opportunityScore: vehicle.opportunityScore ? 1 : 0,
+        financialSummary: vehicle.financialSummary ? 1 : 0
+      },
+      setNull: {
+        simulations: vehicle.simulations.length,
+        leads: vehicle.leads.length,
+        cashFlows: vehicle.cashFlows.length,
+        financialEntries: vehicle.financialEntries.length,
+        payables: vehicle.payables.length,
+        receivables: vehicle.receivables.length,
+        partnerCommissions: vehicle.partnerCommissions.length
+      }
+    });
 
-  revalidatePath("/vehicles");
-  revalidatePath("/dashboard");
-  redirect("/vehicles");
+    await prisma.vehicle.delete({
+      where: {
+        id
+      }
+    });
+
+    try {
+      await createAuditLog({
+        userId: session?.user.id,
+        entityType: "Vehicle",
+        entityId: id,
+        action: "DELETE",
+        beforeData: {
+          id: vehicle.id,
+          displayName: vehicle.displayName,
+          lotCode: vehicle.lotCode
+        },
+        message: "Veiculo excluido"
+      });
+    } catch (auditError) {
+      console.error("[vehicle-delete]", {
+        event: "delete_audit_failed",
+        vehicleId: id,
+        error: auditError
+      });
+    }
+
+    console.log("[vehicle-delete]", {
+      event: "delete_completed",
+      vehicleId: id
+    });
+
+    revalidatePath("/vehicles");
+    revalidatePath("/dashboard");
+
+    return {
+      ok: true,
+      message: "Lote excluido com sucesso."
+    };
+  } catch (error) {
+    console.error("[vehicle-delete]", {
+      event: "delete_failed",
+      vehicleId: id,
+      error
+    });
+
+    return {
+      ok: false,
+      error: "Nao foi possivel excluir o lote."
+    };
+  }
 }

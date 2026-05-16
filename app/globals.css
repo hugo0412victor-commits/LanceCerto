@@ -72,3 +72,68 @@ textarea {
   background-position: 0 0, 14px 14px;
   background-size: 28px 28px;
 }
+
+.auction-sources-marquee {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+}
+
+.auction-sources-marquee::before,
+.auction-sources-marquee::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  z-index: 2;
+  width: min(10vw, 6rem);
+  height: 100%;
+  pointer-events: none;
+}
+
+.auction-sources-marquee::before {
+  left: 0;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0));
+}
+
+.auction-sources-marquee::after {
+  right: 0;
+  background: linear-gradient(270deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0));
+}
+
+.auction-sources-marquee__track {
+  display: flex;
+  width: max-content;
+  gap: 4rem;
+  padding-inline: 2rem;
+  animation: auction-sources-marquee 30s linear infinite;
+  will-change: transform;
+}
+
+.auction-sources-marquee:hover .auction-sources-marquee__track {
+  animation-play-state: paused;
+}
+
+@keyframes auction-sources-marquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@media (max-width: 640px) {
+  .auction-sources-marquee__track {
+    gap: 2rem;
+    padding-inline: 1rem;
+    animation-duration: 24s;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auction-sources-marquee__track {
+    animation: none;
+    transform: none;
+  }
+}

@@ -1,4 +1,5 @@
 import { Activity, Banknote, CarFront, ChartSpline, FileWarning, Gavel, HandCoins, TrendingUp } from "lucide-react";
+import { AuctionSourcesMarquee } from "@/components/auction-sources-marquee";
 import { DashboardCharts } from "@/components/dashboard/dashboard-charts";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { PageHeader } from "@/components/common/page-header";
@@ -56,6 +57,8 @@ export default async function DashboardPage() {
         <StatCard label="Margem média real" value={metrics.margemMediaReal} format="percent" icon={FileWarning} />
         <StatCard label="Tempo médio de giro" value={metrics.averageTurnover} format="number" helper="Dias entre arremate e venda" icon={CarFront} />
       </div>
+
+      <AuctionSourcesMarquee />
 
       <DashboardCharts
         profitByVehicle={charts.profitByVehicle}

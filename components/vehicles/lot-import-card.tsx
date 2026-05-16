@@ -314,6 +314,11 @@ export function LotImportCard({
     setDiscardConfirmOpen(false);
 
     try {
+      console.log("[lot-import:frontend]", {
+        event: "preview_started",
+        inputUrl
+      });
+
       const response = await fetch("/api/lots/import", {
         method: "POST",
         headers: {
@@ -322,6 +327,12 @@ export function LotImportCard({
         body: JSON.stringify({ url: inputUrl, action: "preview" })
       });
       const payload = (await response.json()) as ImportPreview & { ok?: boolean; error?: string; code?: string };
+
+      console.log("[lot-import:frontend]", {
+        event: "preview_response",
+        status: response.status,
+        data: payload
+      });
 
       setLoading(false);
 

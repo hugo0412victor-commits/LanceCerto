@@ -68,7 +68,9 @@ export async function POST(request: Request) {
   let submittedUrl: string | undefined;
 
   try {
-    console.log("[lot-import] route hit");
+    console.log("[lot-import]", {
+      event: "route_hit"
+    });
     logLotImport("info", requestId, "request_started", {
       nodeEnv: process.env.NODE_ENV,
       vercel: process.env.VERCEL === "1",
@@ -100,11 +102,17 @@ export async function POST(request: Request) {
       importData?: Awaited<ReturnType<LotImporter["importFromUrl"]>>;
       duplicateAction?: "new" | "update" | "keep";
     };
-    console.log("[lot-import] received body", body);
+    console.log("[lot-import]", {
+      event: "request_body",
+      body
+    });
     const { url } = body;
     const action = body.action ?? "save";
     submittedUrl = url ?? body.importData?.vehicleData?.lotUrl;
-    console.log("[lot-import] received url", submittedUrl);
+    console.log("[lot-import]", {
+      event: "import_started",
+      url: submittedUrl
+    });
 
     if (!url && !body.importData) {
       logLotImport("warn", requestId, "missing_url");

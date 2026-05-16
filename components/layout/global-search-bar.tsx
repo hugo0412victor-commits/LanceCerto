@@ -6,14 +6,34 @@ import { usePathname, useRouter } from "next/navigation";
 import { Plus, Search, Wand2 } from "lucide-react";
 import { buildCopartLotUrl, extractCopartLotNumber, isCopartLotUrl } from "@/lib/lot-importer/copart-url";
 
-function isCopartImportInput(input: string) {
+function isFreitasImportInput(input: string) {
+  try {
+    const parsed = new URL(input.trim());
+    const hostname = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    return hostname === "freitasleiloeiro.com.br";
+  } catch {
+    return /(?:^https?:\/\/)?(?:www\.)?freitasleiloeiro\.com\.br\//i.test(input.trim());
+  }
+}
+
+function isSodreSantoroImportInput(input: string) {
+  try {
+    const parsed = new URL(input.trim());
+    const hostname = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    return hostname === "sodresantoro.com.br" || hostname.endsWith(".sodresantoro.com.br");
+  } catch {
+    return /(?:^https?:\/\/)?(?:[\w-]+\.)?sodresantoro\.com\.br\//i.test(input.trim());
+  }
+}
+
+function isLotImportInput(input: string) {
   const value = input.trim();
 
   if (!value) {
     return false;
   }
 
-  return isCopartLotUrl(value) || /copart\.com\.br/i.test(value) || /^\/lot\//i.test(value);
+  return isCopartLotUrl(value) || /copart\.com\.br/i.test(value) || /^\/lot\//i.test(value) || isFreitasImportInput(value) || isSodreSantoroImportInput(value);
 }
 
 export function GlobalSearchBar({ userCanWrite }: { userCanWrite: boolean }) {
@@ -22,11 +42,17 @@ export function GlobalSearchBar({ userCanWrite }: { userCanWrite: boolean }) {
   const [query, setQuery] = useState("");
 
   const trimmedQuery = query.trim();
-  const copartInputDetected = useMemo(() => isCopartImportInput(trimmedQuery), [trimmedQuery]);
+  const lotImportDetected = useMemo(() => isLotImportInput(trimmedQuery), [trimmedQuery]);
+  const freitasInputDetected = useMemo(() => isFreitasImportInput(trimmedQuery), [trimmedQuery]);
+  const sodreSantoroInputDetected = useMemo(() => isSodreSantoroImportInput(trimmedQuery), [trimmedQuery]);
   const copartLotNumber = useMemo(() => extractCopartLotNumber(trimmedQuery), [trimmedQuery]);
-  const actionLabel = copartInputDetected ? "Importar lote" : trimmedQuery ? "Buscar" : "Novo lote";
-  const helperText = copartInputDetected
-    ? copartLotNumber
+  const actionLabel = lotImportDetected ? "Importar lote" : trimmedQuery ? "Buscar" : "Novo lote";
+  const helperText = lotImportDetected
+    ? freitasInputDetected
+      ? "Link do Freitas detectado. Pressione Enter para importar."
+      : sodreSantoroInputDetected
+      ? "Link da Sodre Santoro detectado. Pressione Enter para importar."
+      : copartLotNumber
       ? "Link da Copart detectado. Pressione Enter para importar."
       : "Link da Copart detectado, mas sem número de lote."
     : null;
@@ -41,8 +67,9 @@ export function GlobalSearchBar({ userCanWrite }: { userCanWrite: boolean }) {
       return;
     }
 
-    if (copartInputDetected) {
-      const importUrl = copartLotNumber ? buildCopartLotUrl(copartLotNumber) : trimmedQuery;
+    if (lotImportDetected) {
+      const shouldNormalizeCopartUrl = !freitasInputDetected && !sodreSantoroInputDetected && copartLotNumber;
+      const importUrl = shouldNormalizeCopartUrl ? buildCopartLotUrl(copartLotNumber) : trimmedQuery;
       router.push(`/vehicles?importUrl=${encodeURIComponent(importUrl)}`);
       return;
     }
@@ -66,12 +93,12 @@ export function GlobalSearchBar({ userCanWrite }: { userCanWrite: boolean }) {
       </div>
 
       {trimmedQuery || userCanWrite ? (
-        copartInputDetected || trimmedQuery ? (
+        lotImportDetected || trimmedQuery ? (
           <button
             type="submit"
             className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-accent px-4 text-sm font-semibold text-white shadow-glow transition hover:bg-[#C88914]"
           >
-            {copartInputDetected ? <Wand2 className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+            {lotImportDetected ? <Wand2 className="h-4 w-4" /> : <Search className="h-4 w-4" />}
             {actionLabel}
           </button>
         ) : (

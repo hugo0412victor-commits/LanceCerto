@@ -1,7 +1,0 @@
-Documento ficticio do ambiente demo AutoArremate Gestao.
-
-Este arquivo existe apenas para demonstrar:
-- upload e vinculacao de documentos;
-- download interno;
-- persistencia de metadados;
-- fluxo resiliente mesmo quando o documento final ainda nao chegou.

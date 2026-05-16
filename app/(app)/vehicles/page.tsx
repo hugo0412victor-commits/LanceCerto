@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowUpRight, Plus } from "lucide-react";
+import { AuctionSourcesMarquee } from "@/components/auction-sources-marquee";
 import { PageHeader } from "@/components/common/page-header";
 import { LotImportCard } from "@/components/vehicles/lot-import-card";
 import { VehicleStatusBadge } from "@/components/vehicles/status-badge";
@@ -67,6 +68,8 @@ export default async function VehiclesPage({
       ) : null}
 
       <LotImportCard autoImportUrl={importUrl} embedded />
+
+      <AuctionSourcesMarquee />
 
       <Card>
         <CardHeader

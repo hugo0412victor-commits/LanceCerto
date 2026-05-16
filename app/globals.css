@@ -21,6 +21,8 @@
 html,
 body {
   min-height: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 body {
@@ -31,6 +33,13 @@ body {
     linear-gradient(180deg, #f7f9fc 0%, #f2f4f7 100%);
   color: var(--brand-graphite);
   font-family: "Inter", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
 }
 
 a {
@@ -103,9 +112,9 @@ textarea {
 .auction-sources-marquee__track {
   display: flex;
   width: max-content;
-  gap: 4rem;
-  padding-inline: 2rem;
-  animation: auction-sources-marquee 30s linear infinite;
+  gap: 2rem;
+  padding-inline: 1rem;
+  animation: auction-sources-marquee 26s linear infinite;
   will-change: transform;
 }
 
@@ -125,9 +134,9 @@ textarea {
 
 @media (max-width: 640px) {
   .auction-sources-marquee__track {
-    gap: 2rem;
-    padding-inline: 1rem;
-    animation-duration: 24s;
+    gap: 1rem;
+    padding-inline: 0.75rem;
+    animation-duration: 22s;
   }
 }
 

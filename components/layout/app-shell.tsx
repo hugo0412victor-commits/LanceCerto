@@ -48,12 +48,12 @@ export async function AppShell({
   const userCanWrite = canWrite(session?.user.role);
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen w-full max-w-full overflow-x-hidden bg-background">
       <Sidebar systemName={systemName} />
-      <div className="flex min-h-screen flex-1 flex-col">
-        <header className="relative z-10 border-b border-border/70 bg-background px-5 py-5 lg:px-8">
-          <div className="rounded-[2rem] border border-border/80 bg-white px-5 py-5 shadow-sm lg:px-6">
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(440px,0.9fr)] xl:items-start">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col overflow-x-hidden">
+        <header className="relative z-10 min-w-0 border-b border-border/70 bg-background px-4 py-5 lg:px-6">
+          <div className="min-w-0 rounded-[2rem] border border-border/80 bg-white px-4 py-5 shadow-sm lg:px-5">
+            <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.75fr)] xl:items-start">
               <div className="min-w-0">
                 <div className="flex items-center gap-3 lg:hidden">
                   <div className="pl-14">
@@ -76,17 +76,17 @@ export async function AppShell({
                 </div>
               </div>
 
-              <div className="rounded-[1.4rem] border border-border/70 bg-background/55 p-3">
+              <div className="min-w-0 rounded-[1.4rem] border border-border/70 bg-background/55 p-3">
                 <UserHeader session={session} />
               </div>
             </div>
 
-            <div className="mt-5 rounded-[1.6rem] border border-border/70 bg-background/55 p-4">
+            <div className="mt-5 min-w-0 rounded-[1.6rem] border border-border/70 bg-background/55 p-4">
               <GlobalSearchBar userCanWrite={userCanWrite} />
             </div>
           </div>
         </header>
-        <main className="flex-1 px-5 py-6 lg:px-8">{children}</main>
+        <main className="min-w-0 max-w-full flex-1 overflow-x-hidden px-4 py-6 lg:px-6">{children}</main>
       </div>
     </div>
   );
